@@ -173,6 +173,26 @@
             }, 5000);
         };
 
+        const downloadImage = (url) => {
+            fetch(url, { mode: 'cors' })
+                .then(response => response.blob())
+                .then(blob => {
+                    const blobUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `remittance_image_${Date.now()}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(blobUrl);
+                    showMessage('ပုံကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။');
+                })
+                .catch(error => {
+                    console.error("Download error:", error);
+                    showMessage('ပုံဒေါင်းလုတ်ဆွဲရာတွင် အမှားရှိပါသည်', 'error');
+                });
+        };
+
         // Cloudinary Upload Function
         const uploadToCloudinary = async (file) => {
             const formData = new FormData();
@@ -347,7 +367,7 @@
             showScreen(currentScreen);
         };
 
-        // --- Rate Management (ပြင်ဆင်ထားသော version) ---
+        // --- Rate Management ---
         const loadRates = () => {
             const docRef = doc(db, PUBLIC_DATA_PATH, 'rates', 'current');
             onSnapshot(docRef, (docSnap) => {
@@ -378,7 +398,6 @@
                 }
             }, (error) => {
                 console.error("Error fetching rates: ", error);
-                showMessage('ငွေလဲနှုန်းများ ဆွဲယူရာတွင် အမှားရှိပါသည်', 'error');
             });
         };
 
@@ -396,7 +415,7 @@
             }, (error) => console.error("Error fetching bank info: ", error));
         };
 
-        // --- Transfers and Notifications (ပြင်ဆင်ထားသော version) ---
+        // --- Transfers and Notifications ---
         const loadTransfers = () => {
             if (!isAuthReady || !userId) return;
             
@@ -421,15 +440,11 @@
                 userTransfers = transfers.filter(t => t.senderId === userId)
                                          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 
-                console.log('User transfers:', userTransfers.length);
-                console.log('Admin transfers:', adminTransfers.length);
-                
                 if (currentScreen === 'admin') renderAdminPanel();
                 if (currentScreen === 'profile') renderProfile();
 
             }, (error) => {
                 console.error("Error fetching transfers: ", error);
-                showMessage('ငွေလွဲမှုများ ဆွဲယူရာတွင် အမှားရှိပါသည်', 'error');
             });
         };
 
@@ -477,7 +492,7 @@
 
                     <!-- Home Delivery Rate Card -->
                     <div class="card p-6 rounded-xl space-y-4 border border-red-500/50">
-                        <h2 class="text-lg font-bold text-red-400">အိမ်သို့ ငွေလွဲရန် (Home Delivery Rate) (ထိုင်းမှသာ)</h2>
+                        <h2 class="text-lg font-bold text-red-400">အိမ်သို့ ငွေလွဲရန် (Home Delivery Rate)</h2>
                         <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
                             <div class="text-center w-1/3">
                                 <p class="text-xs font-medium text-gray-300">ဘတ်</p>
@@ -551,8 +566,56 @@
                             </button>
                         </div>
                     </div>
+                    ${isAdmin ? renderAdminBankUpdateForm() : ''}
                 </div>
             `;
+        };
+
+        const renderAdminBankUpdateForm = () => {
+            return `
+                <form id="bank-image-update-form" onsubmit="event.preventDefault(); updateBankImages()" class="mt-4 pt-4 border-t border-gray-600 space-y-3">
+                    <h3 class="text-lg font-semibold text-red-400">Admin: ဘဏ်ပုံများ ပြင်ဆင်ရန်</h3>
+                    <div>
+                        <label for="bankImage1File" class="block text-sm font-medium">ဘဏ်ပုံ (၁) အပ်လုဒ်</label>
+                        <input type="file" id="bankImage1File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg">
+                    </div>
+                    <div>
+                        <label for="bankImage2File" class="block text-sm font-medium">ဘဏ်ပုံ (၂) အပ်လုဒ်</label>
+                        <input type="file" id="bankImage2File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg">
+                    </div>
+                    <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
+                </form>
+            `;
+        };
+
+        const updateBankImages = async () => {
+            if (!isAdmin) return showMessage('Admin လုပ်ဆောင်ချက်သာ ဖြစ်သည်', 'error');
+            const file1 = document.getElementById('bankImage1File').files[0];
+            const file2 = document.getElementById('bankImage2File').files[0];
+            
+            if (!file1 && !file2) return showMessage('ပုံအသစ် အနည်းဆုံးတစ်ပုံကို ရွေးချယ်ပါ', 'error');
+
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            let updatedURLs = {};
+
+            try {
+                if (file1) {
+                    updatedURLs.image1URL = await uploadToCloudinary(file1);
+                }
+                if (file2) {
+                    updatedURLs.image2URL = await uploadToCloudinary(file2);
+                }
+
+                const docRef = doc(db, PUBLIC_DATA_PATH, 'config', 'bankInfo');
+                await updateDoc(docRef, updatedURLs);
+                showMessage('ဘဏ်ပုံများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
+
+            } catch (e) {
+                console.error("Error updating bank images: ", e);
+                showMessage('ဘဏ်ပုံ အပ်ဒိတ်လုပ်ရာတွင် အမှားရှိပါသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
         };
 
         const renderAdminRatePanel = () => {
@@ -571,8 +634,9 @@
                             <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${currentRates.MMK_TO_THB.toFixed(2)} ကျပ်</p>
                         </div>
                         <div>
-                            <label for="rateHomeDeliveryTHBInput" class="block text-sm font-medium">အိမ်အရောက်ပို့ (၁သိန်းရရန် ဘတ်)</label>
-                            <input type="number" id="rateHomeDeliveryTHBInput" step="0.01" value="${currentRates.rateHomeDeliveryTHB}" required class="mt-1 w-full p-2 border rounded-lg">
+                            <label for="rateHomeDeliveryTHBInput" class="block text-sm font-medium">အိမ်မှထိုင်းသို့ (၁သိန်းလျှင်ရမည့်ဘတ်)</label>
+                            <input type="number" id="rateHomeDeliveryTHBInput" step="0.01" value="${(100000 / currentRates.rateHomeDeliveryTHB).toFixed(2)}" required class="mt-1 w-full p-2 border rounded-lg">
+                            <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${(100000 / currentRates.rateHomeDeliveryTHB).toFixed(2)} ကျပ်</p>
                         </div>
                         <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">နှုန်းထားများ အပ်ဒိတ်လုပ်ရန်</button>
                     </form>
@@ -586,15 +650,16 @@
             // Get values from the new input format
             const thbFor100kMMK = parseFloat(document.getElementById('rateBuyMMKInput').value);
             const thbFor100kMMK_reverse = parseFloat(document.getElementById('rateBuyTHBInput').value);
-            const rateHomeDeliveryTHB = parseFloat(document.getElementById('rateHomeDeliveryTHBInput').value);
+            const thbFor100kHomeDelivery = parseFloat(document.getElementById('rateHomeDeliveryTHBInput').value);
             
-            if (isNaN(thbFor100kMMK) || isNaN(thbFor100kMMK_reverse) || isNaN(rateHomeDeliveryTHB)) {
+            if (isNaN(thbFor100kMMK) || isNaN(thbFor100kMMK_reverse) || isNaN(thbFor100kHomeDelivery)) {
                 return showMessage('မှန်ကန်သော နှုန်းထားများကို ဖြည့်သွင်းပါ', 'error');
             }
 
             // Convert back to rate per 1 THB
             const rateBuyMMK = 100000 / thbFor100kMMK;
             const rateBuyTHB = 100000 / thbFor100kMMK_reverse;
+            const rateHomeDeliveryTHB = 100000 / thbFor100kHomeDelivery;
 
             document.getElementById('loading-overlay').classList.remove('hidden');
 
@@ -615,8 +680,623 @@
             }
         };
 
-        // Transfer related functions continue...
-        // (ကျန်ရှိသော function များ ဆက်ရှိပါမည်)
+        // --- Transfer Screen ---
+        const renderTransfer = () => {
+            const content = document.getElementById('content-area');
+            
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <div class="card p-5 rounded-xl border border-blue-400/50">
+                        <h2 class="text-xl font-bold text-blue-400 mb-3">ငွေလွဲမှု အမျိုးအစား</h2>
+                        <p class="text-sm text-gray-300 mb-2">Admin မှ ပေးထားသော QR/ဖုန်းနံပါတ်သို့ ငွေပို့ပြီးမှ ဖောင်ဖြည့်ပါ။</p>
+                    </div>
+
+                    <!-- Tabs for Transfer Type -->
+                    <div class="flex border-b border-gray-700">
+                        <button id="tab-account" onclick="setTransferTab('account')" 
+                                class="tab-button flex-1 py-3 text-sm font-medium text-gray-400 hover:text-emerald-400 ${currentTransferTab === 'account' ? 'active' : ''}">
+                            <i class="fa-solid fa-wallet mr-2"></i> အကောင့်သို့ ငွေလွဲရန်
+                        </button>
+                        <button id="tab-home" onclick="setTransferTab('home')" 
+                                class="tab-button flex-1 py-3 text-sm font-medium text-gray-400 hover:text-emerald-400 ${currentTransferTab === 'home' ? 'active' : ''}">
+                            <i class="fa-solid fa-house-chimney-user mr-2"></i> အိမ်အရောက် ပို့ရန်
+                        </button>
+                    </div>
+
+                    <!-- Transfer Form Section -->
+                    <div class="card p-5 rounded-xl">
+                        <h2 class="text-xl font-bold mb-4" id="transfer-form-title">${currentTransferTab === 'account' ? 'အကောင့်သို့ ငွေလွဲရန်' : 'အိမ်အရောက် ပို့ရန်'} ဖောင်</h2>
+                        <form id="transfer-form" onsubmit="event.preventDefault(); submitTransfer('${currentTransferTab}')">
+                            <div class="space-y-4">
+                                
+                                <!-- Transfer Account Selection (ONLY for Account Tab) -->
+                                <div id="account-type-field" class="${currentTransferTab === 'account' ? '' : 'hidden'}">
+                                    <label for="transferAccountType" class="block text-sm font-medium">ငွေပို့ထားသည့် အကောင့် (ရွေးချယ်ပါ)</label>
+                                    <select id="transferAccountType" ${currentTransferTab === 'account' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg focus:ring-emerald-500 focus:border-emerald-500">
+                                        <option value="">-- ရွေးချယ်ပါ --</option>
+                                        <option value="KayPay">Kay Pay</option>
+                                        <option value="WavePay">Wave Pay</option>
+                                        <option value="Other">အခြား (Other)</option>
+                                    </select>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="senderName" class="block text-sm font-medium">ငွေလွဲမည့်သူအမည်</label>
+                                        <input type="text" id="senderName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Aung Aung">
+                                    </div>
+                                    <div>
+                                        <label for="receiverName" class="block text-sm font-medium">ငွေလက်ခံမည့်သူအမည်</label>
+                                        <input type="text" id="receiverName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Ma Ma">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="senderPhoneTH" class="block text-sm font-medium">ဖုန်းနံပါတ် (ထိုင်း)</label>
+                                        <input type="tel" id="senderPhoneTH" required class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                    </div>
+                                    <div>
+                                        <label for="receiverPhoneMM" class="block text-sm font-medium">ဖုန်းနံပါတ် (မြန်မာ)</label>
+                                        <input type="tel" id="receiverPhoneMM" required class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                    </div>
+                                </div>
+                                
+                                <!-- Amount Input -->
+                                <div>
+                                    <label for="amountInput" class="block text-sm font-medium">ငွေလွဲမည့် ပမာဏ</label>
+                                    <div class="mt-1 flex rounded-lg shadow-sm">
+                                        <select id="amountDirection" onchange="updateCalculatedAmount()" class="p-2 border border-r-0 rounded-l-lg focus:ring-emerald-500 focus:border-emerald-500">
+                                            <option value="THB_MMK">ဘတ် ➜ ကျပ်</option>
+                                            <option value="MMK_THB">ကျပ် ➜ ဘတ်</option>
+                                        </select>
+                                        <input type="number" id="amountInput" step="0.01" min="1" required class="flex-grow p-2 border focus:ring-emerald-500 focus:border-emerald-500" placeholder="1000">
+                                    </div>
+                                    <p id="calculated-amount" class="mt-1 text-sm text-emerald-400 font-medium">
+                                        ရရှိမည့်ပမာဏ: 0.00
+                                    </p>
+                                </div>
+                                
+                                <!-- Home Delivery Specific Field -->
+                                <div id="home-address-field" class="${currentTransferTab === 'home' ? '' : 'hidden'}">
+                                    <label for="deliveryAddress" class="block text-sm font-medium text-red-400">ပို့ရမည့်လိပ်စာ (မဖြစ်မနေ)</label>
+                                    <textarea id="deliveryAddress" rows="3" ${currentTransferTab === 'home' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="လက်ခံမည့်သူ၏ လိပ်စာ အပြည့်အစုံ"></textarea>
+                                </div>
+
+                                <!-- Receipt File Upload -->
+                                <div>
+                                    <label for="receiptFile" class="block text-sm font-medium">ငွေပို့ထားသော စလစ်ပုံ ထည့်ရန် (ပုံဖိုင်)</label>
+                                    <input type="file" id="receiptFile" accept="image/*" required class="mt-1 w-full p-2 border rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-emerald-400 hover:file:bg-gray-500">
+                                    <p class="text-xs text-red-400 mt-1">** လွဲပြီးကြောင်း အတည်ပြုရန်အတွက် ပုံဖိုင်ကို မဖြစ်မနေ ထည့်သွင်းပေးရပါမည်။</p>
+                                </div>
+                                
+                            </div>
+                            
+                            <button type="submit" class="btn-primary w-full py-3 rounded-lg mt-6 text-lg font-semibold">ပို့ရန်</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => { updateCalculatedAmount(); }, 0);
+            document.getElementById('amountInput').addEventListener('input', updateCalculatedAmount);
+            document.getElementById('amountDirection').addEventListener('change', updateCalculatedAmount);
+        };
+
+        const updateCalculatedAmount = () => {
+            const input = parseFloat(document.getElementById('amountInput').value);
+            const direction = document.getElementById('amountDirection').value;
+            const output = document.getElementById('calculated-amount');
+            
+            if (isNaN(input) || input <= 0) {
+                output.textContent = `ရရှိမည့်ပမာဏ: 0.00`;
+                return;
+            }
+
+            let result, fromCurrency, toCurrency;
+            
+            if (direction === 'THB_MMK') {
+                result = input * currentRates.THB_TO_MMK;
+                fromCurrency = 'ဘတ်';
+                toCurrency = 'ကျပ်';
+            } else {
+                result = input / currentRates.MMK_TO_THB;
+                fromCurrency = 'ကျပ်';
+                toCurrency = 'ဘတ်';
+            }
+            
+            output.textContent = `${input.toFixed(2)} ${fromCurrency} သည် ရရှိမည့်ပမာဏ: ${result.toFixed(2)} ${toCurrency} ဖြစ်သည်`;
+        };
+
+        const setTransferTab = (tab) => {
+            currentTransferTab = tab;
+            // Update Tab Styles
+            document.getElementById('tab-account').classList.remove('active');
+            document.getElementById('tab-home').classList.remove('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            
+            // Update Form Fields
+            document.getElementById('transfer-form-title').textContent = `${tab === 'account' ? 'အကောင့်သို့ ငွေလွဲရန်' : 'အိမ်အရောက် ပို့ရန်'} ဖောင်`;
+            
+            const accountTypeField = document.getElementById('account-type-field');
+            const accountTypeInput = document.getElementById('transferAccountType');
+            const addressField = document.getElementById('home-address-field');
+            const addressInput = document.getElementById('deliveryAddress');
+
+            // Account Type Visibility (Only for 'account' tab)
+            if (tab === 'account') {
+                accountTypeField.classList.remove('hidden');
+                accountTypeInput.setAttribute('required', 'required');
+            } else {
+                accountTypeField.classList.add('hidden');
+                accountTypeInput.removeAttribute('required');
+            }
+            
+            // Address Visibility (Only for 'home' tab)
+            if (tab === 'home') {
+                addressField.classList.remove('hidden');
+                addressInput.setAttribute('required', 'required');
+            } else {
+                addressField.classList.add('hidden');
+                addressInput.removeAttribute('required');
+            }
+            
+            // Update Submission handler
+            document.getElementById('transfer-form').onsubmit = (e) => {
+                e.preventDefault();
+                submitTransfer(currentTransferTab);
+            };
+        };
+
+        const submitTransfer = async (transferType) => {
+            if (!userId) return showMessage('အသုံးပြုသူအချက်အလက် မရှိပါ', 'error');
+
+            const form = document.getElementById('transfer-form');
+            const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
+            const senderName = document.getElementById('senderName').value;
+            const senderPhoneTH = document.getElementById('senderPhoneTH').value;
+            const receiverName = document.getElementById('receiverName').value;
+            const receiverPhoneMM = document.getElementById('receiverPhoneMM').value;
+            const amountInput = parseFloat(document.getElementById('amountInput').value);
+            const amountDirection = document.getElementById('amountDirection').value;
+            const receiptFileInput = document.getElementById('receiptFile');
+            const receiptFile = receiptFileInput.files[0];
+            
+            let deliveryAddress = '';
+            if (transferType === 'home') {
+                deliveryAddress = document.getElementById('deliveryAddress').value;
+            }
+            
+            if (isNaN(amountInput) || amountInput <= 0 || !receiptFile) {
+                return showMessage('ပမာဏ သို့မဟုတ် စလစ်ပုံဖိုင်ကို မှန်ကန်စွာ ဖြည့်သွင်းပါ', 'error');
+            }
+
+            let amountTHB, amountMMK;
+            if (amountDirection === 'THB_MMK') {
+                amountTHB = amountInput;
+                amountMMK = amountInput * currentRates.THB_TO_MMK;
+            } else {
+                amountMMK = amountInput;
+                amountTHB = amountInput / currentRates.MMK_TO_THB;
+            }
+
+            document.getElementById('loading-overlay').classList.remove('hidden');
+
+            try {
+                // --- 1. Upload Logic using Cloudinary ---
+                let receiptImageURL = '';
+                receiptImageURL = await uploadToCloudinary(receiptFile);
+
+                // --- 2. Firestore Logic ---
+                const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
+                const newTransferRef = doc(transfersColRef);
+                
+                await setDoc(newTransferRef, {
+                    senderId: userId,
+                    senderEmail: userEmail,
+                    senderName,
+                    senderPhoneTH,
+                    receiverName,
+                    receiverPhoneMM,
+                    transferAccountType, 
+                    amountTHB: parseFloat(amountTHB.toFixed(2)),
+                    amountMMK: parseFloat(amountMMK.toFixed(2)),
+                    transferDirection: amountDirection,
+                    transferType: transferType, 
+                    deliveryAddress: deliveryAddress || 'N/A', 
+                    receiptImageURL, 
+                    timestamp: serverTimestamp(),
+                    status: 'Pending',
+                    adminReply: { message: '', imageURL: '' }
+                });
+
+                form.reset();
+                updateCalculatedAmount(); 
+                showMessage('ငွေလွဲမှု တောင်းဆိုချက် အောင်မြင်စွာ ပို့ပြီးပါပြီ။');
+                showScreen('home');
+
+            } catch (e) {
+                console.error("Error in transfer process (Upload or Firestore): ", e);
+                let errorMessage = 'ငွေလွဲမှု တောင်းဆိုချက် ပို့ရာတွင် အမှားရှိပါသည် (သို့) ပုံတင်ရာတွင် ပြဿနာရှိပါသည်။';
+                showMessage(errorMessage, 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
+        };
+
+        // --- Admin Panel Functions ---
+        const renderAdminPanel = () => {
+            if (!isAdmin) return showScreen('home');
+            
+            const pendingTransfers = adminTransfers.filter(t => t.status === 'Pending');
+            const content = document.getElementById('content-area');
+
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-red-400">Admin စစ်ဆေးဆဲ စာရင်း (${pendingTransfers.length})</h2>
+                    <p class="text-sm text-gray-400">စစ်ဆေးရန်ကျန်ရှိသော စာရင်းများ</p>
+
+                    <div id="admin-transfers-list" class="space-y-3">
+                        ${pendingTransfers.length === 0 ? 
+                            '<p class="text-gray-400 p-4 card rounded-lg text-center">စစ်ဆေးရန် ငွေလွဲမှုများ မရှိပါ</p>' :
+                            pendingTransfers.map(t => `
+                                <div onclick="renderAdminTransferDetail('${t.id}')" class="card p-4 rounded-xl cursor-pointer hover:bg-gray-700 transition duration-150">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <p class="font-bold text-lg text-emerald-400">${t.senderName || 'N/A'}</p>
+                                            <p class="text-xs text-gray-400">${t.senderEmail}</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="text-sm font-semibold px-2 py-1 rounded-full ${t.transferType === 'home' ? 'bg-red-600' : 'bg-blue-600'} text-white">
+                                                ${t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 'အကောင့်သို့ ငွေလွဲ'}
+                                            </span>
+                                            <p class="text-xs mt-1">${t.amountTHB} ဘတ် ➜ ${t.amountMMK} ကျပ်</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderAdminTransferDetail = (transferId) => {
+            const transfer = adminTransfers.find(t => t.id === transferId);
+            if (!transfer) return showMessage('အချက်အလက် ရှာမတွေ့ပါ', 'error');
+
+            const content = document.getElementById('content-area');
+            const transferTypeLabel = transfer.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 'အကောင့်သို့ ငွေလွဲ';
+            const date = transfer.timestamp ? transfer.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
+            
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <button onclick="showScreen('admin')" class="text-blue-400 hover:text-blue-300 mb-4"><i class="fa-solid fa-arrow-left mr-2"></i> စီမံခန့်ခွဲမှု သို့ ပြန်သွားရန်</button>
+                    
+                    <h2 class="text-2xl font-bold text-red-400">ငွေလွဲမှု အသေးစိတ် - (${transferTypeLabel})</h2>
+                    <div class="card p-5 rounded-xl space-y-3">
+                        <p><strong>ငွေလွဲသူ (Name):</strong> ${transfer.senderName}</p>
+                        <p><strong>Email:</strong> ${transfer.senderEmail}</p>
+                        <p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
+                        <p><strong>လက်ခံသူ (Name):</strong> ${transfer.receiverName}</p>
+                        <p><strong>Phone (MM):</strong> ${transfer.receiverPhoneMM}</p>
+                        <p><strong>Amount:</strong> ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(2)} ကျပ်</p>
+                        <p><strong>Type:</strong> ${transferTypeLabel} (${transfer.transferAccountType})</p>
+                        <p class="text-red-400"><strong>ပို့ရမည့်လိပ်စာ:</strong> ${transfer.deliveryAddress || 'N/A'}</p>
+                        <p><strong>ရက်စွဲ:</strong> ${date}</p>
+                        <p><strong>Status:</strong> <span class="font-bold text-yellow-400">${transfer.status}</span></p>
+                    </div>
+
+                    <!-- Receipt Image and Download -->
+                    <div class="card p-5 rounded-xl space-y-3">
+                        <h3 class="text-xl font-bold mb-2">ငွေပို့စလစ်ပုံ</h3>
+                        <img src="${transfer.receiptImageURL}" onerror="this.src='https://placehold.co/400x200/374151/ffffff?text=No+Receipt'" class="w-full rounded-lg object-cover border border-gray-600 max-h-48" alt="[Image of Transfer Receipt]">
+                        <button onclick="downloadImage('${transfer.receiptImageURL}')" class="w-full flex items-center justify-center p-2 text-sm bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
+                            <i class="fa-solid fa-download mr-2"></i> ပုံကို Save စလစ်ပုံ
+                        </button>
+                    </div>
+
+                    <!-- Admin Reply Form -->
+                    <div class="card p-5 rounded-xl space-y-3">
+                        <h3 class="text-xl font-bold mb-2 text-emerald-400">စာ/ပုံ ပြန်ပို့ရန်</h3>
+                        <form id="admin-reply-form" onsubmit="event.preventDefault(); sendAdminReply('${transfer.id}')">
+                            <div>
+                                <label for="replyMessage" class="block text-sm font-medium">စာသား</label>
+                                <textarea id="replyMessage" rows="2" class="mt-1 w-full p-2 border rounded-lg" placeholder="ငွေလွဲမှု အတည်ပြုချက် သို့မဟုတ် မက်ဆေ့ခ်ျ"></textarea>
+                            </div>
+                            <div>
+                                <label for="replyImage" class="block text-sm font-medium">ပုံ ပြန်ပို့ရန် (ရွေးချယ်ရန်)</label>
+                                <input type="file" id="replyImage" accept="image/*" class="mt-1 w-full p-2 border rounded-lg file:bg-gray-600 file:text-emerald-400">
+                            </div>
+                            <button type="submit" class="w-full py-2 rounded-lg font-semibold bg-emerald-600 text-white mt-3 hover:bg-emerald-500">
+                                <i class="fa-solid fa-reply mr-2"></i> User သို့ ပြန်ပို့ရန်
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Complete Button -->
+                    <button onclick="completeTransfer('${transfer.id}')" class="w-full py-3 rounded-lg font-bold bg-green-600 text-white hover:bg-green-500">
+                        <i class="fa-solid fa-check-circle mr-2"></i> ငွေလွဲမှု ပြီးဆုံးကြောင်း အတည်ပြုရန်
+                    </button>
+                </div>
+            `;
+        };
+
+        const sendAdminReply = async (transferId) => {
+            if (!isAdmin) return;
+            const transfer = adminTransfers.find(t => t.id === transferId);
+            if (!transfer) return;
+            
+            const message = document.getElementById('replyMessage').value.trim();
+            const imageFile = document.getElementById('replyImage').files[0];
+
+            if (!message && !imageFile) return showMessage('စာ သို့မဟုတ် ပုံ တစ်ခုခု ထည့်သွင်းပေးပါ', 'error');
+
+            document.getElementById('loading-overlay').classList.remove('hidden');
+
+            let replyImageURL = '';
+            
+            try {
+                if (imageFile) {
+                    replyImageURL = await uploadToCloudinary(imageFile);
+                }
+
+                // 1. Send Notification to User's Inbox
+                const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${transfer.senderId}`, 'notifications'));
+                await setDoc(notificationRef, {
+                    title: `Admin မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်`,
+                    message: message || 'Admin မှ သင့်အား ပုံဖြင့် အကြောင်းပြန်ကြားထားပါသည်။',
+                    imageURL: replyImageURL,
+                    isRead: false,
+                    timestamp: serverTimestamp(),
+                    relatedTransferId: transferId
+                });
+
+                // 2. Update Transfer status to Completed if message contains key phrase (optional, but good practice)
+                if (message.includes('ပြီးပါပြီ') || message.includes('Completed')) {
+                    await updateDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', transferId), { status: 'Completed' });
+                }
+
+                showMessage('User သို့ အကြောင်းပြန်ကြားချက် အောင်မြင်စွာ ပို့ပြီးပါပြီ။');
+                document.getElementById('admin-reply-form').reset();
+            } catch (e) {
+                console.error("Error sending reply: ", e);
+                showMessage('ပြန်ပို့ရာတွင် အမှားရှိသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
+        };
+        
+        const completeTransfer = async (transferId) => {
+            if (!isAdmin) return;
+            document.getElementById('loading-overlay').classList.remove('hidden');
+
+            try {
+                await updateDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', transferId), { status: 'Completed' });
+                
+                // Also send a formal notification
+                const transfer = adminTransfers.find(t => t.id === transferId);
+                const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${transfer.senderId}`, 'notifications'));
+                await setDoc(notificationRef, {
+                    title: `✅ ငွေလွဲမှု အောင်မြင်ပါသည်။`,
+                    message: `သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးကြောင်း အတည်ပြုပါသည်။`,
+                    isRead: false,
+                    timestamp: serverTimestamp(),
+                    relatedTransferId: transferId
+                });
+
+                showMessage('ငွေလွဲမှု ပြီးဆုံးကြောင်း အောင်မြင်စွာ အတည်ပြုပြီးပါပြီ။');
+                showScreen('admin');
+            } catch (e) {
+                console.error("Error completing transfer: ", e);
+                showMessage('အတည်ပြုရာတွင် အမှားရှိသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
+        };
+
+        // --- Inbox Screen ---
+        const renderInbox = () => {
+            const content = document.getElementById('content-area');
+            
+            content.innerHTML = `
+                <div class="space-y-6" id="inbox-content">
+                    <h2 class="text-2xl font-bold text-emerald-400">အဝင်စာ</h2>
+                    <p class="text-sm text-gray-400">Admin မှ ပို့သော မက်ဆေ့ခ်ျများ</p>
+                    
+                    <div id="notifications-list" class="space-y-3">
+                        ${userNotifications.length === 0 ? 
+                            '<p class="text-gray-400 p-4 card rounded-lg text-center">အဝင်စာ မရှိပါ</p>' :
+                            userNotifications.map(n => {
+                                const date = n.timestamp ? n.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
+                                return `
+                                    <div onclick="markNotificationAsRead('${n.id}')" class="card p-4 rounded-xl cursor-pointer transition duration-150 ${n.isRead ? 'opacity-80' : 'border-2 border-yellow-400'}">
+                                        <div class="flex items-start">
+                                            <i class="fa-solid fa-bell text-xl ${n.isRead ? 'text-gray-400' : 'text-yellow-400'} mr-3 mt-1"></i>
+                                            <div class="flex-grow">
+                                                <p class="font-bold ${n.isRead ? 'text-gray-200' : 'text-white'}">${n.title}</p>
+                                                <p class="text-sm text-gray-400">${n.message}</p>
+                                                ${n.imageURL ? `
+                                                    <img src="${n.imageURL}" onerror="this.src='https://placehold.co/100x50/374151/ffffff?text=Image'" class="mt-2 rounded-lg max-h-20 object-contain border border-gray-600" alt="">
+                                                    <a href="${n.imageURL}" target="_blank" onclick="event.stopPropagation();" class="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"><i class="fa-solid fa-expand-alt mr-1"></i> ပုံကြီးချဲ့ကြည့်ရန်</a>
+                                                ` : ''}
+                                                <p class="text-xs text-gray-500 mt-2">${date}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')
+                        }
+                    </div>
+                </div>
+            `;
+        };
+
+        const markNotificationAsRead = async (id) => {
+            if (!userId) return;
+            try {
+                const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications', id);
+                await updateDoc(docRef, { isRead: true });
+            } catch(e) {
+                console.error("Error marking as read:", e);
+            }
+        };
+
+        // --- Profile Screen ---
+        const renderProfile = () => {
+            const content = document.getElementById('content-area');
+            const user = auth.currentUser;
+            const userEmail = user?.email || 'N/A';
+            const userDisplayName = user?.displayName || '';
+
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <!-- Profile Card -->
+                    <div class="card p-5 rounded-xl">
+                        <h2 class="text-2xl font-bold mb-4">Profile နှင့် Account</h2>
+                        
+                        <div class="space-y-3">
+                            <p><strong>Username:</strong> ${userDisplayName || 'N/A'}</p>
+                            <p><strong>Email:</strong> ${userEmail}</p>
+                            <p><strong>User ID:</strong> ${userId || 'N/A'}</p>
+                        </div>
+                        
+                        <form id="update-profile-form" onsubmit="event.preventDefault(); updateProfileName()" class="mt-4 pt-4 border-t border-gray-600">
+                            <label for="usernameInput" class="block text-sm font-medium">Username (ပြောင်းလဲရန်)</label>
+                            <input type="text" id="usernameInput" value="${userDisplayName}" placeholder="သင့်အမည်" class="mt-1 w-full p-2 border rounded-lg">
+                            <button type="submit" class="btn-primary w-full py-2 rounded-lg mt-3 font-semibold">Username အပ်ဒိတ်</button>
+                        </form>
+                    </div>
+
+                    <!-- Past Transfers Section -->
+                    <div class="card p-5 rounded-xl">
+                        <h2 class="text-xl font-bold mb-3">ငွေပို့ထားသည့် စာရင်းများ</h2>
+                        <div id="profile-transfers-list" class="space-y-3">
+                            ${renderProfileTransfers()}
+                        </div>
+                    </div>
+
+                    <!-- Settings & Logout -->
+                    <div class="card p-5 rounded-xl">
+                        <h2 class="text-xl font-bold mb-3">Settings</h2>
+                        
+                        <!-- Language Selection -->
+                        <div class="flex justify-between items-center py-2 border-b border-gray-600">
+                            <span class="font-medium">ဘာသာစကား (Language)</span>
+                            <select onchange="setLanguage(this.value)" class="p-1 border rounded-lg bg-gray-600">
+                                <option value="my" selected>မြန်မာ (Burmese)</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+
+                        <!-- Logout Button -->
+                        <button onclick="handleLogout()" class="w-full py-2 rounded-lg font-bold bg-red-600 text-white mt-4 hover:bg-red-500">
+                            <i class="fa-solid fa-sign-out-alt mr-2"></i> Log Out
+                        </button>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderProfileTransfers = () => {
+            if (userTransfers.length === 0) return '<p class="text-gray-400 text-center">သင် ငွေလွဲထားသော စာရင်းများ မရှိပါ</p>';
+
+            return userTransfers.map(t => {
+                const date = t.timestamp ? t.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
+                const statusColor = t.status === 'Completed' ? 'bg-green-600' : (t.status === 'Pending' ? 'bg-yellow-600' : 'bg-red-600');
+                const transferTypeLabel = t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 'အကောင့်သို့ ငွေလွဲ';
+
+                return `
+                    <div class="card p-3 rounded-xl">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="font-bold text-gray-100">${t.amountTHB.toFixed(2)} ဘတ် ➜ ${t.amountMMK.toFixed(2)} ကျပ်</p>
+                                <p class="text-xs text-gray-400 mt-1">${transferTypeLabel} (${t.receiverName})</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusColor} text-white">${t.status}</span>
+                                <p class="text-xs text-gray-500 mt-1">${date}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        const updateProfileName = async () => {
+            const usernameInput = document.getElementById('usernameInput').value.trim();
+            if (!usernameInput) return showMessage('Username ဖြည့်သွင်းပါ', 'error');
+
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            try {
+                await updateProfile(auth.currentUser, { displayName: usernameInput });
+                showMessage('Username အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။');
+                // Re-render to show updated name
+                showScreen('profile');
+            } catch (error) {
+                console.error("Error updating profile:", error);
+                showMessage('Username ပြောင်းလဲရာတွင် အမှားရှိသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
+        };
+
+        // --- Core Application Logic ---
+        const showScreen = (screenName) => {
+            if (!isAuthReady) return;
+
+            if (screenName === 'admin' && !isAdmin) {
+                screenName = 'home';
+            }
+
+            currentScreen = screenName;
+            const navButtons = document.querySelectorAll('.nav-button');
+
+            // Reset navigation styles
+            navButtons.forEach(btn => {
+                // Ensure only non-admin buttons reset to gray
+                if (btn.id !== 'admin-nav-button') {
+                    btn.classList.remove('text-emerald-400');
+                    btn.classList.add('text-gray-400');
+                } else {
+                    btn.classList.remove('text-red-400');
+                }
+            });
+
+            // Set active navigation style
+            const activeBtn = document.querySelector(`[onclick="showScreen('${screenName}')"]`);
+            if (activeBtn) {
+                if (screenName === 'admin') {
+                    activeBtn.classList.add('text-red-400');
+                    activeBtn.classList.remove('text-gray-400');
+                } else {
+                    activeBtn.classList.add('text-emerald-400');
+                    activeBtn.classList.remove('text-gray-400');
+                }
+            }
+
+            const content = document.getElementById('content-area');
+            content.innerHTML = `<p class="text-center text-gray-500">ဒေတာများ ဆွဲယူနေပါသည်...</p>`;
+
+            switch (screenName) {
+                case 'home':
+                    renderHome();
+                    break;
+                case 'transfer':
+                    renderTransfer();
+                    break;
+                case 'inbox':
+                    renderInbox();
+                    break;
+                case 'profile':
+                    renderProfile();
+                    break;
+                case 'admin':
+                    renderAdminPanel();
+                    break;
+                default:
+                    renderHome();
+            }
+        };
 
         // Start initialization
         initFirebase();
@@ -638,40 +1318,21 @@
             renderHome();
         };
         window.updateRates = updateRates;
-        window.showScreen = (screenName) => {
-            if (!isAuthReady) return;
-            if (screenName === 'admin' && !isAdmin) screenName = 'home';
-            
-            currentScreen = screenName;
-            const content = document.getElementById('content-area');
-            
-            // Reset and set active nav
-            document.querySelectorAll('.nav-button').forEach(btn => {
-                if (btn.id !== 'admin-nav-button') {
-                    btn.classList.remove('text-emerald-400');
-                    btn.classList.add('text-gray-400');
-                }
-            });
-            
-            const activeBtn = document.querySelector(`[onclick="showScreen('${screenName}')"]`);
-            if (activeBtn) {
-                if (screenName === 'admin') {
-                    activeBtn.classList.add('text-red-400');
-                } else {
-                    activeBtn.classList.add('text-emerald-400');
-                }
-            }
-
-            content.innerHTML = `<p class="text-center text-gray-500">ဒေတာများ ဆွဲယူနေပါသည်...</p>`;
-
-            switch (screenName) {
-                case 'home': renderHome(); break;
-                case 'transfer': renderTransfer(); break;
-                case 'inbox': renderInbox(); break;
-                case 'profile': renderProfile(); break;
-                case 'admin': renderAdminPanel(); break;
-                default: renderHome();
-            }
+        window.showScreen = showScreen;
+        window.setTransferTab = setTransferTab;
+        window.submitTransfer = submitTransfer;
+        window.updateCalculatedAmount = updateCalculatedAmount;
+        window.renderAdminPanel = renderAdminPanel;
+        window.renderAdminTransferDetail = renderAdminTransferDetail;
+        window.sendAdminReply = sendAdminReply;
+        window.completeTransfer = completeTransfer;
+        window.markNotificationAsRead = markNotificationAsRead;
+        window.updateProfileName = updateProfileName;
+        window.downloadImage = downloadImage;
+        window.updateBankImages = updateBankImages;
+        window.setLanguage = (lang) => {
+            // Language change functionality
+            showMessage('ဘာသာစကား ပြောင်းလဲမှု အောင်မြင်ပါသည်');
         };
 
     </script>
