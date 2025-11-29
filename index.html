@@ -1,3 +1,4 @@
+Wai Yan, [29/11/2025 18:50]
 <!DOCTYPE html>
 <html lang="my">
 <head>
@@ -97,37 +98,39 @@
         <!-- Navigation Footer -->
         <footer id="nav-footer" class="sticky bottom-0 w-full max-w-xl mx-auto bg-gray-800 border-t border-gray-700 p-2 shadow-lg">
             <div class="flex justify-around text-xs font-medium" id="nav-container">
-                <!-- Nav items will be generated here -->
+
+Wai Yan, [29/11/2025 18:50]
+<!-- Nav items will be generated here -->
             </div>
         </footer>
     </div>
     
-    <!-- Firebase SDKs and Logic -->
+    <!-- Appwrite SDK and Logic -->
+    <script src="https://cdn.jsdelivr.net/npm/appwrite@13.0.0"></script>
     <script type="module">
-        // --- Firebase Imports (v12.6.0) ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, updateDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-storage.js";
+        // --- Appwrite Imports ---
+        const { Client, Account, Databases, Storage } = Appwrite;
         
         // --- Global Variables and Constants ---
         const ADMIN_EMAIL = 'c388925@gmail.com';
-        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // User provided Firebase Config
-        const FIREBASE_CONFIG = {
-            apiKey: "AIzaSyD6EZGq9wU4B09Z8Z6mZKKXOLIoTnGeSp8",
-            authDomain: "thai-myanmar-money-transfer.firebaseapp.com",
-            projectId: "thai-myanmar-money-transfer",
-            storageBucket: "thai-myanmar-money-transfer.firebasestorage.app",
-            messagingSenderId: "1057537205300",
-            appId: "1:1057537205300:web:ebbb50ff752c2577701661",
-            measurementId: "G-MHK8GCNLY4"
+        const APP_ID = typeof app_id !== 'undefined' ? app_id : 'default-app-id';
+        
+        // Appwrite Configuration
+        const APPWRITE_CONFIG = {
+            endpoint: 'https://sgp.cloud.appwrite.io/v1',
+            projectId: '692ab4ee0030433b4b61',
+            databaseId: '692abb320000cc971136',
+            transferCollectionId: 'wai118234',
+            userCollectionId: 'yan118234',
+            notificationCollectionId: 'soe118234',
+            storageBucketId: 'waiyansoe118234',
+            adminApiKey: 'standard_69074ed91e0a2b3ef3040bfbc0bfc36d473a6713582827d874f3b8bf3d8943f12f581e2b85c333cc7320bb78a726b98871605cd9448dd8f9b155cf388ccf7e239e409921aa9f1453a91eb94b57fd6968fa0c37c0bc97547cc7dca4b191745d97a93ce7a87396ecbf2ef9b9504107468863699eb011853439cdf508e548ebe367'
         };
         
-        let app;
-        let db;
-        let auth;
-        let storage; 
+        let client;
+        let account;
+        let databases;
+        let storage;
         let userId = null;
         let userEmail = null;
         let isAdmin = false;
@@ -190,11 +193,13 @@
         const showMessage = (msg, type = 'success') => {
             const box = document.getElementById('message-box');
             const color = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
-            const html = `
+
+Wai Yan, [29/11/2025 18:50]
+const html = 
                 <div class="${color} text-white p-3 rounded-lg shadow-xl mb-3 text-sm" style="min-width: 250px;">
                     ${msg}
                 </div>
-            `;
+            ;
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
             const messageElement = tempDiv.firstChild;
@@ -219,7 +224,7 @@
                     const blobUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = blobUrl;
-                    a.download = `remittance_image_${Date.now()}.png`;
+                    a.download = remittance_image_${Date.now()}.png;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
@@ -233,73 +238,90 @@
         };
         window.downloadImage = downloadImage;
 
-        // --- Firebase Initialization and Auth ---
+        // --- Appwrite Initialization and Auth ---
 
-        const initFirebase = async () => {
+        const initAppwrite = async () => {
             try {
-                app = initializeApp(FIREBASE_CONFIG);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                storage = getStorage(app); 
+                client = new Client()
+                    .setEndpoint(APPWRITE_CONFIG.endpoint)
+                    .setProject(APPWRITE_CONFIG.projectId);
                 
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        userEmail = user.email;
-                        isAdmin = user.email === ADMIN_EMAIL;
-                        
-                        document.getElementById('user-info').textContent = `${user.displayName || user.email} (ID: ${userId.substring(0, 8)}...)`;
-                        // Admin button is now handled in updateStaticText/nav bar
-                        
-                        document.getElementById('auth-screen').classList.add('hidden');
-                        document.getElementById('app-content-wrapper').classList.remove('hidden');
-
-                        if (!isAuthReady) {
-                            isAuthReady = true;
-                            updateStaticText();
-                            loadRates();
-                            loadAdminBankInfo();
-                            loadTransfers();
-                            loadNotifications();
-                            showScreen('home'); 
-                        } else {
-                            // Only update navigation if admin status changes (shouldn't happen post-login, but good for safety)
-                            updateStaticText(); 
-                        }
-                    } else {
-                        isAuthReady = false;
-                        userId = null;
-                        userEmail = null;
-                        isAdmin = false;
-                        document.getElementById('app-content-wrapper').classList.add('hidden');
-                        document.getElementById('auth-screen').classList.remove('hidden');
-                        renderAuthScreen();
-                    }
-                    document.getElementById('loading-overlay').classList.add('hidden');
-                });
+                account = new Account(client);
+                databases = new Databases(client);
+                storage = new Storage(client);
+                
+                // Set admin API key for server-side operations
+                client.setKey(APPWRITE_CONFIG.adminApiKey);
+                
+                // Check if user is already logged in
+                try {
+                    const user = await account.get();
+                    handleAuthStateChange(user);
+                } catch (error) {
+                    // User is not logged in
+                    handleAuthStateChange(null);
+                }
                 
                 // Show loading initially
                 document.getElementById('loading-overlay').classList.remove('hidden');
 
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
+                console.error("Appwrite Initialization Error:", error);
                 document.getElementById('loading-overlay').classList.add('hidden');
-                showMessage(`Firebase အမှား: ${error.message}`, 'error');
+                showMessage(Appwrite အမှား: ${error.message}, 'error');
             }
+        };
+
+        const handleAuthStateChange = (user) => {
+            if (user) {
+                userId = user.$id;
+                userEmail = user.email;
+                isAdmin = user.email === ADMIN_EMAIL;
+                
+                document.getElementById('user-info').textContent = ${user.name || user.email} (ID: ${userId.substring(0, 8)}...);
+                // Admin button is now handled in updateStaticText/nav bar
+                
+                document.getElementById('auth-screen').classList.add('hidden');
+                document.getElementById('app-content-wrapper').classList.remove('hidden');
+
+                if (!isAuthReady) {
+                    isAuthReady = true;
+                    updateStaticText();
+
+Wai Yan, [29/11/2025 18:50]
+loadRates();
+                    loadAdminBankInfo();
+                    loadTransfers();
+                    loadNotifications();
+                    showScreen('home'); 
+                } else {
+                    // Only update navigation if admin status changes (shouldn't happen post-login, but good for safety)
+                    updateStaticText(); 
+                }
+            } else {
+                isAuthReady = false;
+                userId = null;
+                userEmail = null;
+                isAdmin = false;
+                document.getElementById('app-content-wrapper').classList.add('hidden');
+                document.getElementById('auth-screen').classList.remove('hidden');
+                renderAuthScreen();
+            }
+            document.getElementById('loading-overlay').classList.add('hidden');
         };
 
         const renderAuthScreen = (isLogin = true) => {
             const authScreen = document.getElementById('auth-screen');
-            authScreen.innerHTML = `
+            authScreen.innerHTML = 
                 <div class="card w-full max-w-sm p-8 rounded-xl space-y-6">
                     <h2 class="text-3xl font-bold text-center text-emerald-400">${isLogin ? 'အကောင့်ဝင်ရန်' : 'အကောင့်ဖွင့်ရန်'}</h2>
                     
                     <form id="auth-form" onsubmit="event.preventDefault(); handleAuthSubmit(${isLogin})">
-                        ${!isLogin ? `
+                        ${!isLogin ? 
                             <div>
                                 <label for="username" class="block text-sm font-medium mb-1">Username</label>
                                 <input type="text" id="username" required class="w-full p-3 border rounded-lg" placeholder="သင့်အမည်">
-                            </div>` : ''}
+                            </div> : ''}
                         <div>
                             <label for="email" class="block text-sm font-medium mb-1">Email</label>
                             <input type="email" id="email" required class="w-full p-3 border rounded-lg" placeholder="example@gmail.com">
@@ -318,7 +340,7 @@
                         ${isLogin ? 'အကောင့်မရှိသေးဘူးလား? အကောင့်ဖွင့်ရန်' : 'အကောင့်ရှိပြီးသားလား? အကောင့်ဝင်ရန်'}
                     </button>
                 </div>
-            `;
+            ;
         };
         window.renderAuthScreen = renderAuthScreen;
         
@@ -331,21 +353,24 @@
 
             try {
                 if (isLogin) {
-                    await signInWithEmailAndPassword(auth, email, password);
+                    await account.createEmailSession(email, password);
+                    const user = await account.get();
+                    handleAuthStateChange(user);
                     showMessage('အကောင့်ဝင်ခြင်း အောင်မြင်ပါသည်။');
                 } else {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    await updateProfile(userCredential.user, { displayName: username });
+                    await account.create(email, password, username);
+
+Wai Yan, [29/11/2025 18:50]
+await account.createEmailSession(email, password);
+                    const user = await account.get();
+                    handleAuthStateChange(user);
                     showMessage('အကောင့်ဖွင့်ခြင်း အောင်မြင်ပါသည်။');
                 }
             } catch (error) {
                 console.error("Auth Error:", error);
                 let msg = 'အမှားရှိသည်';
-                if (error.code === 'auth/invalid-email') msg = 'Email မှားယွင်းနေသည်။';
-                else if (error.code === 'auth/wrong-password') msg = 'Password မှားယွင်းနေသည်။';
-                else if (error.code === 'auth/user-not-found') msg = 'ဤအကောင့် မရှိပါ။';
-                else if (error.code === 'auth/email-already-in-use') msg = 'ဤ Email ဖြင့် အကောင့်ဖွင့်ထားပြီးဖြစ်သည်။';
-                else if (error.code === 'auth/weak-password') msg = 'Password မှာ အနည်းဆုံး ၆ လုံးရှိရမည်။';
+                if (error.code === 400) msg = 'Email သို့မဟုတ် Password မှားယွင်းနေသည်။';
+                else if (error.code === 409) msg = 'ဤ Email ဖြင့် အကောင့်ဖွင့်ထားပြီးဖြစ်သည်။';
 
                 showMessage(msg, 'error');
             } finally {
@@ -357,7 +382,8 @@
         const handleLogout = async () => {
              document.getElementById('loading-overlay').classList.remove('hidden');
             try {
-                await signOut(auth);
+                await account.deleteSession('current');
+                handleAuthStateChange(null);
                 showMessage('အောင်မြင်စွာ ထွက်ခွာခဲ့ပြီးပါပြီ။');
             } catch (error) {
                  showMessage('ထွက်ခွာရန် အမှားရှိသည်', 'error');
@@ -365,23 +391,22 @@
         };
         window.handleLogout = handleLogout;
 
+        // --- Appwrite Data Handlers & Paths ---
 
-        // --- Firestore Data Handlers & Paths ---
-
-        const PUBLIC_DATA_PATH = `/artifacts/${APP_ID}/public/data`;
-        const USER_DATA_PATH = (uid) => `/artifacts/${APP_ID}/users/${uid}`;
+        const PUBLIC_DATA_PATH = 'public';
+        const USER_DATA_PATH = (uid) => users/${uid};
 
         const updateStaticText = () => {
-            const adminButtonHtml = isAdmin ? `
+            const adminButtonHtml = isAdmin ? 
                 <button onclick="showScreen('admin')" id="admin-nav-button" class="nav-button flex flex-col items-center p-2 rounded-lg text-red-400 hover:text-red-300">
                     <i class="fa-solid fa-screwdriver-wrench text-xl"></i>
                     <span class="mt-1">${t('adminPanel')}</span>
                 </button>
-            ` : '';
+             : '';
 
             // Navigation buttons update
             const navContainer = document.getElementById('nav-container');
-            navContainer.innerHTML = `
+            navContainer.innerHTML = 
                 <button onclick="showScreen('home')" class="nav-button flex flex-col items-center p-2 rounded-lg text-gray-400 hover:text-emerald-500">
                     <i class="fa-solid fa-exchange-alt text-xl"></i>
                     <span class="mt-1">${t('home')}</span>
@@ -400,106 +425,181 @@
                     <span class="mt-1">${t('profile')}</span>
                 </button>
                 ${adminButtonHtml} <!-- Admin button is now here -->
-            `;
+            ;
             showScreen(currentScreen);
         };
         
         // --- Rate and Bank Info Management ---
 
         const loadRates = () => {
-            const docRef = doc(db, PUBLIC_DATA_PATH, 'rates', 'current');
-            onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    currentRates.THB_TO_MMK = data.rateBuyMMK || 121.95; 
-                    currentRates.MMK_TO_THB = data.rateBuyTHB || 126.58; 
-                    currentRates.rateHomeDeliveryTHB = data.rateHomeDeliveryTHB || 820; 
+            // Using Appwrite to fetch rates
+            const fetchRates = async () => {
+                try {
+                    const response = await databases.getDocument(
+
+Wai Yan, [29/11/2025 18:50]
+APPWRITE_CONFIG.databaseId,
+                        PUBLIC_DATA_PATH,
+                        'rates'
+                    );
                     
-                    const timestamp = data.lastUpdated;
-                    if (timestamp) {
-                        const date = timestamp.toDate();
-                        currentRates.lastUpdated = date.toLocaleString('my-MM', {
-                            year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                        });
-                    } else {
-                        currentRates.lastUpdated = 'ယခုလေးတင်';
+                    if (response) {
+                        const data = response;
+                        currentRates.THB_TO_MMK = data.rateBuyMMK || 121.95; 
+                        currentRates.MMK_TO_THB = data.rateBuyTHB || 126.58; 
+                        currentRates.rateHomeDeliveryTHB = data.rateHomeDeliveryTHB || 820; 
+                        
+                        const timestamp = data.lastUpdated;
+                        if (timestamp) {
+                            const date = new Date(timestamp);
+                            currentRates.lastUpdated = date.toLocaleString('my-MM', {
+                                year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            });
+                        } else {
+                            currentRates.lastUpdated = 'ယခုလေးတင်';
+                        }
+                        if (currentScreen === 'home') renderHome(); 
                     }
-                    if (currentScreen === 'home') renderHome(); 
-                } else {
-                    setDoc(docRef, { 
-                        rateBuyMMK: currentRates.THB_TO_MMK, 
-                        rateBuyTHB: currentRates.MMK_TO_THB,
-                        rateHomeDeliveryTHB: currentRates.rateHomeDeliveryTHB, 
-                        lastUpdated: serverTimestamp() 
-                    });
+                } catch (error) {
+                    console.error("Error fetching rates: ", error);
+                    // Create default rates if they don't exist
+                    if (error.code === 404) {
+                        try {
+                            await databases.createDocument(
+                                APPWRITE_CONFIG.databaseId,
+                                PUBLIC_DATA_PATH,
+                                'rates',
+                                {
+                                    rateBuyMMK: currentRates.THB_TO_MMK, 
+                                    rateBuyTHB: currentRates.MMK_TO_THB,
+                                    rateHomeDeliveryTHB: currentRates.rateHomeDeliveryTHB, 
+                                    lastUpdated: new Date().toISOString()
+                                }
+                            );
+                        } catch (createError) {
+                            console.error("Error creating rates: ", createError);
+                        }
+                    }
                 }
-            }, (error) => console.error("Error fetching rates: ", error));
+            };
+            
+            fetchRates();
+            // Set up real-time updates if needed
+            // client.subscribe(databases.${APPWRITE_CONFIG.databaseId}.collections.${PUBLIC_DATA_PATH}.documents.rates, fetchRates);
         };
         
         const loadAdminBankInfo = () => {
-             const docRef = doc(db, PUBLIC_DATA_PATH, 'config', 'bankInfo');
-             onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    adminBankInfo.image1URL = data.image1URL || adminBankInfo.image1URL;
-                    adminBankInfo.image2URL = data.image2URL || adminBankInfo.image2URL;
-                    if (currentScreen === 'home' || currentScreen === 'admin') renderHome();
-                } else {
-                     setDoc(docRef, adminBankInfo, { merge: true });
+            const fetchBankInfo = async () => {
+                try {
+                    const response = await databases.getDocument(
+                        APPWRITE_CONFIG.databaseId,
+                        PUBLIC_DATA_PATH,
+                        'bankInfo'
+                    );
+                    
+                    if (response) {
+                        const data = response;
+                        adminBankInfo.image1URL = data.image1URL || adminBankInfo.image1URL;
+                        adminBankInfo.image2URL = data.image2URL || adminBankInfo.image2URL;
+                        if (currentScreen === 'home' || currentScreen === 'admin') renderHome();
+                    }
+                } catch (error) {
+                    console.error("Error fetching bank info: ", error);
+                    // Create default bank info if it doesn't exist
+                    if (error.code === 404) {
+                        try {
+                            await databases.createDocument(
+                                APPWRITE_CONFIG.databaseId,
+                                PUBLIC_DATA_PATH,
+                                'bankInfo',
+                                adminBankInfo
+                            );
+                        } catch (createError) {
+                            console.error("Error creating bank info: ", createError);
+                        }
+                    }
                 }
-             }, (error) => console.error("Error fetching bank info: ", error));
+            };
+            
+            fetchBankInfo();
         };
         
         // --- Transfers and Notifications ---
 
-        const loadTransfers = () => {
+Wai Yan, [29/11/2025 18:50]
+const loadTransfers = () => {
             if (!isAuthReady || !userId) return;
-            const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
-            const q = query(transfersColRef); 
             
-            onSnapshot(q, (snapshot) => {
-                const transfers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                adminTransfers = transfers;
-                adminTransfers.sort((a, b) => {
-                    if (a.status === 'Pending' && b.status !== 'Pending') return -1;
-                    if (a.status !== 'Pending' && b.status === 'Pending') return 1;
-                    return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
-                });
+            const fetchTransfers = async () => {
+                try {
+                    const response = await databases.listDocuments(
+                        APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.transferCollectionId
+                    );
+                    
+                    const transfers = response.documents.map(doc => ({ id: doc.$id, ...doc }));
+                    
+                    adminTransfers = transfers;
+                    adminTransfers.sort((a, b) => {
+                        if (a.status === 'Pending' && b.status !== 'Pending') return -1;
+                        if (a.status !== 'Pending' && b.status === 'Pending') return 1;
+                        return new Date(b.timestamp) - new Date(a.timestamp);
+                    });
 
-                userTransfers = transfers.filter(t => t.senderId === userId)
-                                         .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                
-                if (currentScreen === 'admin') renderAdminPanel();
-                if (currentScreen === 'profile') renderProfile(); 
+                    userTransfers = transfers.filter(t => t.senderId === userId)
+                                             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    if (currentScreen === 'admin') renderAdminPanel();
+                    if (currentScreen === 'profile') renderProfile(); 
 
-            }, (error) => console.error("Error fetching transfers: ", error));
+                } catch (error) {
+                    console.error("Error fetching transfers: ", error);
+                }
+            };
+            
+            fetchTransfers();
         };
 
         const loadNotifications = () => {
             if (!isAuthReady || !userId) return;
-            const notificationsColRef = collection(db, USER_DATA_PATH(userId), 'notifications');
-            const q = query(notificationsColRef); 
+            
+            const fetchNotifications = async () => {
+                try {
+                    const response = await databases.listDocuments(
+                        APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.notificationCollectionId,
+                        [
+                            equal("userId", "${userId}")
+                        ]
+                    );
+                    
+                    userNotifications = response.documents.map(doc => ({ id: doc.$id, ...doc }))
+                                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    const unreadCount = userNotifications.filter(n => !n.isRead).length;
+                    const badge = document.getElementById('inbox-badge');
+                    if (badge) {
+                         badge.classList.toggle('hidden', unreadCount === 0);
+                    }
 
-            onSnapshot(q, (snapshot) => {
-                userNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                
-                const unreadCount = userNotifications.filter(n => !n.isRead).length;
-                const badge = document.getElementById('inbox-badge');
-                if (badge) {
-                     badge.classList.toggle('hidden', unreadCount === 0);
+                    if (currentScreen === 'inbox') renderInbox();
+                } catch (error) {
+                    console.error("Error fetching notifications: ", error);
                 }
-
-                if (currentScreen === 'inbox') renderInbox();
-            }, (error) => console.error("Error fetching notifications: ", error));
+            };
+            
+            fetchNotifications();
         };
         
         const markNotificationAsRead = async (id) => {
             if (!userId) return;
             try {
-                const docRef = doc(db, USER_DATA_PATH(userId), 'notifications', id);
-                await updateDoc(docRef, { isRead: true });
+                await databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.notificationCollectionId,
+                    id,
+                    { isRead: true }
+                );
             } catch(e) {
                 console.error("Error marking as read:", e);
             }
@@ -521,7 +621,8 @@
                     <p class="text-sm font-semibold text-emerald-400">${t('rateTitle')}</p>
                     <p class="text-xs text-gray-400">နောက်ဆုံး အပ်ဒိတ်: ${lastUpdated}</p>
 
-                    <!-- Home Delivery Rate Card (Updated Title) -->
+Wai Yan, [29/11/2025 18:50]
+<!-- Home Delivery Rate Card (Updated Title) -->
                     <div class="card p-6 rounded-xl space-y-4 border border-red-500/50">
                         <h2 class="text-lg font-bold text-red-400">${t('homeDeliveryRateTitle')} (${t('thbToMmk')}သာ)</h2>
                         <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
@@ -550,7 +651,7 @@
                                     ${transferDirection === 'THB_TO_MMK' ? t('thbToMmk') : t('mmkToThb')}
                                 </p>
                                 <p class="text-xl font-bold text-gray-50 mt-1">
-                                    ${transferDirection === 'THB_TO_MMK' ? `${thbAmount_MMK} ${t('thb')}` : `100,000 ${t('mmk')}`}
+                                    ${transferDirection === 'THB_TO_MMK' ? ${thbAmount_MMK} ${t('thb')} : 100,000 ${t('mmk')}}
                                 </p>
                             </div>
 
@@ -563,7 +664,7 @@
                                     ${transferDirection === 'THB_TO_MMK' ? t('mmk') : t('thb')}
                                 </p>
                                 <p class="text-xl font-bold text-gray-50 mt-1">
-                                    ${transferDirection === 'THB_TO_MMK' ? `100,000 ${t('mmk')}` : `${thbAmount_THB} ${t('thb')}`}
+                                    ${transferDirection === 'THB_TO_MMK' ? 100,000 ${t('mmk')} : ${thbAmount_THB} ${t('thb')}}
                                 </p>
                             </div>
                         </div>
@@ -581,10 +682,12 @@
                 </div>
             `;
         };
-        window.renderHome = renderHome;
+
+Wai Yan, [29/11/2025 18:50]
+window.renderHome = renderHome;
         
         const renderAdminBankInfo = () => {
-            return `
+            return 
                 <div class="card p-5 rounded-xl border border-blue-400/50">
                     <h2 class="text-xl font-bold text-blue-400 mb-3">${t('bankInfo')}</h2>
                     <div class="grid grid-cols-2 gap-4">
@@ -593,22 +696,22 @@
                     </div>
                      ${isAdmin ? renderAdminBankUpdateForm() : ''}
                 </div>
-            `;
+            ;
         };
 
         const renderBankImage = (url, alt, id) => {
-            return `
+            return 
                 <div class="space-y-2">
                     <img id="${id}" src="${url}" onerror="this.src='https://placehold.co/200x100/374151/ffffff?text=${alt}'" class="w-full rounded-lg object-cover border border-gray-600" alt="">
                     <button onclick="downloadImage('${url}')" class="w-full flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
                         <i class="fa-solid fa-download mr-2"></i> ${t('download')}
                     </button>
                 </div>
-            `;
+            ;
         };
 
         const renderAdminRatePanel = () => {
-            return `
+            return 
                 <div class="card p-5 rounded-xl border border-red-400/50">
                     <h2 class="text-xl font-bold text-red-400 mb-3">Admin: ငွေလဲနှုန်းများ ပြင်ဆင်ရန်</h2>
                     <form id="rate-update-form" onsubmit="event.preventDefault(); updateRates()" class="space-y-3">
@@ -627,7 +730,7 @@
                         <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">နှုန်းထားများ အပ်ဒိတ်လုပ်ရန်</button>
                     </form>
                 </div>
-            `;
+            ;
         };
 
         const updateRates = async () => {
@@ -637,20 +740,26 @@
             const rateBuyTHB = parseFloat(document.getElementById('rateBuyTHBInput').value);
             const rateHomeDeliveryTHB = parseFloat(document.getElementById('rateHomeDeliveryTHBInput').value);
             
-            if (isNaN(rateBuyMMK) || isNaN(rateBuyTHB) || isNaN(rateHomeDeliveryTHB)) {
+            if (isNaN(rateBuyMMK)  isNaN(rateBuyTHB)  isNaN(rateHomeDeliveryTHB)) {
                 return showMessage('မှန်ကန်သော နှုန်းထားများကို ဖြည့်သွင်းပါ', 'error');
             }
 
             document.getElementById('loading-overlay').classList.remove('hidden');
 
             try {
-                const docRef = doc(db, PUBLIC_DATA_PATH, 'rates', 'current');
-                await updateDoc(docRef, { 
-                    rateBuyMMK, 
-                    rateBuyTHB,
-                    rateHomeDeliveryTHB,
-                    lastUpdated: serverTimestamp() 
-                });
+                await databases.updateDocument(
+
+Wai Yan, [29/11/2025 18:50]
+APPWRITE_CONFIG.databaseId,
+                    PUBLIC_DATA_PATH,
+                    'rates',
+                    { 
+                        rateBuyMMK, 
+                        rateBuyTHB,
+                        rateHomeDeliveryTHB,
+                        lastUpdated: new Date().toISOString()
+                    }
+                );
                 showMessage('နှုန်းထားများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
             } catch (e) {
                 console.error("Error updating rates: ", e);
@@ -662,7 +771,7 @@
         window.updateRates = updateRates;
         
         const renderAdminBankUpdateForm = () => {
-            return `
+            return 
                 <form id="bank-image-update-form" onsubmit="event.preventDefault(); updateBankImages()" class="mt-4 pt-4 border-t border-gray-600 space-y-3">
                     <h3 class="text-lg font-semibold text-red-400">Admin: ဘဏ်ပုံများ ပြင်ဆင်ရန်</h3>
                     <div>
@@ -675,10 +784,9 @@
                     </div>
                     <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
                 </form>
-            `;
+            ;
         };
 
-        // ** ပြင်ဆင်ထားသည့် function **
         const updateBankImages = async () => {
             if (!isAdmin) return showMessage('Admin လုပ်ဆောင်ချက်သာ ဖြစ်သည်', 'error');
             const file1 = document.getElementById('bankImage1File').files[0];
@@ -690,11 +798,13 @@
             let updatedURLs = {};
 
             const uploadFile = async (file, slot) => {
-                const fileName = `${APP_ID}_bank_${slot}_${Date.now()}.png`;
-                const storagePath = `artifacts/${APP_ID}/config/${fileName}`;
-                const storageRef = ref(storage, storagePath);
-                await uploadBytes(storageRef, file);
-                return getDownloadURL(storageRef);
+                const fileName = ${APP_ID}_bank_${slot}_${Date.now()}.png;
+                const response = await storage.createFile(
+                    APPWRITE_CONFIG.storageBucketId,
+                    fileName,
+                    file
+                );
+                return storage.getFilePreview(APPWRITE_CONFIG.storageBucketId, response.$id);
             };
 
             try {
@@ -705,8 +815,12 @@
                     updatedURLs.image2URL = await uploadFile(file2, '2');
                 }
 
-                const docRef = doc(db, PUBLIC_DATA_PATH, 'config', 'bankInfo');
-                await updateDoc(docRef, updatedURLs);
+                await databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    PUBLIC_DATA_PATH,
+                    'bankInfo',
+                    updatedURLs
+                );
                 showMessage('ဘဏ်ပုံများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
 
             } catch (e) {
@@ -715,7 +829,9 @@
                 showMessage(errorMessage, 'error');
             } finally {
                 document.getElementById('loading-overlay').classList.add('hidden');
-            }
+
+Wai Yan, [29/11/2025 18:50]
+}
         };
         window.updateBankImages = updateBankImages;
         
@@ -724,7 +840,6 @@
             renderHome();
         };
         window.toggleRateDirection = toggleRateDirection;
-
 
         // --- Transfer Screen ---
 
@@ -774,7 +889,9 @@
                                         <label for="senderName" class="block text-sm font-medium">ငွေလွဲမည့်သူအမည်</label>
                                         <input type="text" id="senderName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Aung Aung">
                                     </div>
-                                    <div>
+
+Wai Yan, [29/11/2025 18:50]
+<div>
                                         <label for="receiverName" class="block text-sm font-medium">ငွေလက်ခံမည့်သူအမည်</label>
                                         <input type="text" id="receiverName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Ma Ma">
                                     </div>
@@ -817,7 +934,9 @@
                                     <label for="receiptFile" class="block text-sm font-medium">ငွေပို့ထားသော စလစ်ပုံ ထည့်ရန် (ပုံဖိုင်)</label>
                                     <input type="file" id="receiptFile" accept="image/*" required class="mt-1 w-full p-2 border rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-emerald-400 hover:file:bg-gray-500">
                                     <p class="text-xs text-red-400 mt-1">** လွဲပြီးကြောင်း အတည်ပြုရန်အတွက် ပုံဖိုင်ကို မဖြစ်မနေ ထည့်သွင်းပေးရပါမည်။</p>
-                                </div>
+
+Wai Yan, [29/11/2025 18:50]
+</div>
                                 
                             </div>
                             
@@ -825,7 +944,7 @@
                         </form>
                     </div>
                 </div>
-            `;
+            ;
             setTimeout(() => { updateCalculatedAmount(); }, 0);
             document.getElementById('amountInput').addEventListener('input', updateCalculatedAmount);
             document.getElementById('amountDirection').addEventListener('change', updateCalculatedAmount);
@@ -838,7 +957,7 @@
             const output = document.getElementById('calculated-amount');
             
             if (isNaN(input) || input <= 0) {
-                output.textContent = `ရရှိမည့်ပမာဏ: 0.00`;
+                output.textContent = ရရှိမည့်ပမာဏ: 0.00;
                 return;
             }
 
@@ -854,7 +973,7 @@
                 toCurrency = 'ဘတ်';
             }
             
-            output.textContent = `${input.toFixed(2)} ${fromCurrency} သည် ရရှိမည့်ပမာဏ: ${result.toFixed(2)} ${toCurrency} ဖြစ်သည်`;
+            output.textContent = ${input.toFixed(2)} ${fromCurrency} သည် ရရှိမည့်ပမာဏ: ${result.toFixed(2)} ${toCurrency} ဖြစ်သည်;
         };
         window.updateCalculatedAmount = updateCalculatedAmount;
         
@@ -863,10 +982,10 @@
             // Update Tab Styles
             document.getElementById('tab-account').classList.remove('active');
             document.getElementById('tab-home').classList.remove('active');
-            document.getElementById(`tab-${tab}`).classList.add('active');
+            document.getElementById(tab-${tab}).classList.add('active');
             
             // Update Form Fields
-            document.getElementById('transfer-form-title').textContent = `${tab === 'account' ? t('transferAccountTab') : t('transferHomeTab')} ဖောင်`;
+            document.getElementById('transfer-form-title').textContent = ${tab === 'account' ? t('transferAccountTab') : t('transferHomeTab')} ဖောင်`;
             
             const accountTypeField = document.getElementById('account-type-field');
             const accountTypeInput = document.getElementById('transferAccountType');
@@ -899,11 +1018,11 @@
         };
         window.setTransferTab = setTransferTab;
 
-        // ** ပြင်ဆင်ထားသည့် function **
         const submitTransfer = async (transferType) => {
             if (!userId) return showMessage('အသုံးပြုသူအချက်အလက် မရှိပါ', 'error');
 
-            const form = document.getElementById('transfer-form');
+Wai Yan, [29/11/2025 18:50]
+const form = document.getElementById('transfer-form');
             const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
             const senderName = document.getElementById('senderName').value;
             const senderPhoneTH = document.getElementById('senderPhoneTH').value;
@@ -919,7 +1038,7 @@
                 deliveryAddress = document.getElementById('deliveryAddress').value;
             }
             
-            if (isNaN(amountInput) || amountInput <= 0 || !receiptFile) {
+            if (isNaN(amountInput)  amountInput <= 0  !receiptFile) {
                 return showMessage('ပမာဏ သို့မဟုတ် စလစ်ပုံဖိုင်ကို မှန်ကန်စွာ ဖြည့်သွင်းပါ', 'error');
             }
 
@@ -938,35 +1057,39 @@
                 // --- 1. Upload Logic ---
                 let receiptImageURL = '';
                 const fileExtension = receiptFile.name.split('.').pop();
-                const fileName = `${userId}_${Date.now()}_receipt.${fileExtension}`;
-                const storagePath = `artifacts/${APP_ID}/transfers/receipts/${fileName}`;
-                const storageRef = ref(storage, storagePath);
+                const fileName = ${userId}_${Date.now()}_receipt.${fileExtension};
                 
-                const uploadResult = await uploadBytes(storageRef, receiptFile);
-                receiptImageURL = await getDownloadURL(uploadResult.ref);
+                const uploadResult = await storage.createFile(
+                    APPWRITE_CONFIG.storageBucketId,
+                    fileName,
+                    receiptFile
+                );
+                receiptImageURL = storage.getFilePreview(APPWRITE_CONFIG.storageBucketId, uploadResult.$id);
 
-                // --- 2. Firestore Logic ---
-                const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
-                const newTransferRef = doc(transfersColRef);
-                
-                await setDoc(newTransferRef, {
-                    senderId: userId,
-                    senderEmail: userEmail,
-                    senderName,
-                    senderPhoneTH,
-                    receiverName,
-                    receiverPhoneMM,
-                    transferAccountType, 
-                    amountTHB: parseFloat(amountTHB.toFixed(2)),
-                    amountMMK: parseFloat(amountMMK.toFixed(2)),
-                    transferDirection: amountDirection,
-                    transferType: transferType, 
-                    deliveryAddress: deliveryAddress || 'N/A', 
-                    receiptImageURL, 
-                    timestamp: serverTimestamp(),
-                    status: 'Pending',
-                    adminReply: { message: '', imageURL: '' }
-                });
+                // --- 2. Appwrite Database Logic ---
+                await databases.createDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.transferCollectionId,
+                    'unique()',
+                    {
+                        senderId: userId,
+                        senderEmail: userEmail,
+                        senderName,
+                        senderPhoneTH,
+                        receiverName,
+                        receiverPhoneMM,
+                        transferAccountType, 
+                        amountTHB: parseFloat(amountTHB.toFixed(2)),
+                        amountMMK: parseFloat(amountMMK.toFixed(2)),
+                        transferDirection: amountDirection,
+                        transferType: transferType, 
+                        deliveryAddress: deliveryAddress || 'N/A', 
+                        receiptImageURL, 
+                        timestamp: new Date().toISOString(),
+                        status: 'Pending',
+                        adminReply: { message: '', imageURL: '' }
+                    }
+                );
 
                 form.reset();
                 updateCalculatedAmount(); 
@@ -974,16 +1097,17 @@
                 showScreen('home');
 
             } catch (e) {
-                console.error("Error in transfer process (Upload or Firestore): ", e);
+                console.error("Error in transfer process (Upload or Database): ", e);
                 let errorMessage = 'ငွေလွဲမှု တောင်းဆိုချက် ပို့ရာတွင် အမှားရှိပါသည် (သို့) ပုံတင်ရာတွင် ပြဿနာရှိပါသည်။ Console ကို စစ်ဆေးပါ (Security Rules ပြဿနာ ဖြစ်နိုင်သည်)။';
-                showMessage(errorMessage, 'error');
+
+Wai Yan, [29/11/2025 18:50]
+showMessage(errorMessage, 'error');
             } finally {
                 // Ensure loading spinner is always hidden, regardless of success or failure
                 document.getElementById('loading-overlay').classList.add('hidden');
             }
         };
         window.submitTransfer = submitTransfer;
-
 
         // --- Admin Panel Functions ---
         
@@ -993,7 +1117,7 @@
             const pendingTransfers = adminTransfers.filter(t => t.status === 'Pending');
             const content = document.getElementById('content-area');
 
-            content.innerHTML = `
+            content.innerHTML = 
                 <div class="space-y-6">
                     <h2 class="text-2xl font-bold text-red-400">${t('adminPendingTitle')} (${pendingTransfers.length})</h2>
                     <p class="text-sm text-gray-400">စစ်ဆေးရန်ကျန်ရှိသော စာရင်းများ</p>
@@ -1001,7 +1125,7 @@
                     <div id="admin-transfers-list" class="space-y-3">
                         ${pendingTransfers.length === 0 ? 
                             '<p class="text-gray-400 p-4 card rounded-lg text-center">စစ်ဆေးရန် ငွေလွဲမှုများ မရှိပါ</p>' :
-                            pendingTransfers.map(t => `
+                            pendingTransfers.map(t => 
                                 <div onclick="renderAdminTransferDetail('${t.id}')" class="card p-4 rounded-xl cursor-pointer hover:bg-gray-700 transition duration-150">
                                     <div class="flex justify-between items-center">
                                         <div>
@@ -1016,11 +1140,11 @@
                                         </div>
                                     </div>
                                 </div>
-                            `).join('')
+                            ).join('')
                         }
                     </div>
                 </div>
-            `;
+            ;
         };
         window.renderAdminPanel = renderAdminPanel;
 
@@ -1030,7 +1154,7 @@
 
             const content = document.getElementById('content-area');
             const transferTypeLabel = transfer.transferType === 'home' ? t('typeHome') : t('typeAccount');
-            const date = transfer.timestamp ? transfer.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
+            const date = transfer.timestamp ? new Date(transfer.timestamp).toLocaleString('my-MM') : 'N/A';
             
             content.innerHTML = `
                 <div class="space-y-6">
@@ -1040,7 +1164,9 @@
                     <div class="card p-5 rounded-xl space-y-3">
                         <p><strong>ငွေလွဲသူ (Name):</strong> ${transfer.senderName}</p>
                         <p><strong>Email:</strong> ${transfer.senderEmail}</p>
-                        <p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
+
+Wai Yan, [29/11/2025 18:50]
+<p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
                         <p><strong>လက်ခံသူ (Name):</strong> ${transfer.receiverName}</p>
                         <p><strong>Phone (MM):</strong> ${transfer.receiverPhoneMM}</p>
                         <p><strong>Amount:</strong> ${transfer.amountTHB.toFixed(2)} ${t('thb')} ➜ ${transfer.amountMMK.toFixed(2)} ${t('mmk')}</p>
@@ -1098,32 +1224,45 @@
 
             document.getElementById('loading-overlay').classList.remove('hidden');
 
-            let replyImageURL = '';
+Wai Yan, [29/11/2025 18:50]
+let replyImageURL = '';
             
             try {
                 if (imageFile) {
                     const fileExtension = imageFile.name.split('.').pop();
-                    const fileName = `${transferId}_admin_reply_${Date.now()}.${fileExtension}`;
-                    const storagePath = `artifacts/${APP_ID}/transfers/replies/${fileName}`;
-                    const storageRef = ref(storage, storagePath);
-                    await uploadBytes(storageRef, imageFile);
-                    replyImageURL = await getDownloadURL(storageRef);
+                    const fileName = ${transferId}_admin_reply_${Date.now()}.${fileExtension};
+                    const uploadResult = await storage.createFile(
+                        APPWRITE_CONFIG.storageBucketId,
+                        fileName,
+                        imageFile
+                    );
+                    replyImageURL = storage.getFilePreview(APPWRITE_CONFIG.storageBucketId, uploadResult.$id);
                 }
 
                 // 1. Send Notification to User's Inbox
-                const notificationRef = doc(collection(db, USER_DATA_PATH(transfer.senderId), 'notifications'));
-                await setDoc(notificationRef, {
-                    title: `Admin မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်`,
-                    message: message || 'Admin မှ သင့်အား ပုံဖြင့် အကြောင်းပြန်ကြားထားပါသည်။',
-                    imageURL: replyImageURL,
-                    isRead: false,
-                    timestamp: serverTimestamp(),
-                    relatedTransferId: transferId
-                });
+                await databases.createDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.notificationCollectionId,
+                    'unique()',
+                    {
+                        userId: transfer.senderId,
+                        title: Admin မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်,
+                        message: message || 'Admin မှ သင့်အား ပုံဖြင့် အကြောင်းပြန်ကြားထားပါသည်။',
+                        imageURL: replyImageURL,
+                        isRead: false,
+                        timestamp: new Date().toISOString(),
+                        relatedTransferId: transferId
+                    }
+                );
 
                 // 2. Update Transfer status to Completed if message contains key phrase (optional, but good practice)
                 if (message.includes('ပြီးပါပြီ') || message.includes('Completed')) {
-                    await updateDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', transferId), { status: 'Completed' });
+                    await databases.updateDocument(
+                        APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.transferCollectionId,
+                        transferId,
+                        { status: 'Completed' }
+                    );
                 }
 
                 showMessage('User သို့ အကြောင်းပြန်ကြားချက် အောင်မြင်စွာ ပို့ပြီးပါပြီ။');
@@ -1142,22 +1281,34 @@
             document.getElementById('loading-overlay').classList.remove('hidden');
 
             try {
-                await updateDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', transferId), { status: 'Completed' });
+                await databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.transferCollectionId,
+                    transferId,
+                    { status: 'Completed' }
+                );
                 
                 // Also send a formal notification
                 const transfer = adminTransfers.find(t => t.id === transferId);
-                const notificationRef = doc(collection(db, USER_DATA_PATH(transfer.senderId), 'notifications'));
-                await setDoc(notificationRef, {
-                    title: `✅ ငွေလွဲမှု အောင်မြင်ပါသည်။`,
-                    message: `သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးကြောင်း အတည်ပြုပါသည်။`,
-                    isRead: false,
-                    timestamp: serverTimestamp(),
-                    relatedTransferId: transferId
-                });
+                await databases.createDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.notificationCollectionId,
+                    'unique()',
+                    {
+                        userId: transfer.senderId,
+                        title: ✅ ငွေလွဲမှု အောင်မြင်ပါသည်။,
+                        message: သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးကြောင်း အတည်ပြုပါသည်။,
+                        isRead: false,
+                        timestamp: new Date().toISOString(),
+                        relatedTransferId: transferId
+                    }
+                );
 
                 showMessage('ငွေလွဲမှု ပြီးဆုံးကြောင်း အောင်မြင်စွာ အတည်ပြုပြီးပါပြီ။');
                 showScreen('admin');
-            } catch (e) {
+
+Wai Yan, [29/11/2025 18:50]
+} catch (e) {
                 console.error("Error completing transfer: ", e);
                 showMessage('အတည်ပြုရာတွင် အမှားရှိသည်', 'error');
             } finally {
@@ -1166,13 +1317,12 @@
         };
         window.completeTransfer = completeTransfer;
 
-
         // --- Inbox Screen ---
 
         const renderInbox = () => {
             const content = document.getElementById('content-area');
             
-            content.innerHTML = `
+            content.innerHTML = 
                 <div class="space-y-6" id="inbox-content">
                     <h2 class="text-2xl font-bold text-emerald-400">${t('inbox')}</h2>
                     <p class="text-sm text-gray-400">Admin မှ ပို့သော မက်ဆေ့ခ်ျများ</p>
@@ -1181,28 +1331,28 @@
                         ${userNotifications.length === 0 ? 
                             '<p class="text-gray-400 p-4 card rounded-lg text-center">အဝင်စာ မရှိပါ</p>' :
                             userNotifications.map(n => {
-                                const date = n.timestamp ? n.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
-                                return `
+                                const date = n.timestamp ? new Date(n.timestamp).toLocaleString('my-MM') : 'N/A';
+                                return 
                                     <div onclick="markNotificationAsRead('${n.id}')" class="card p-4 rounded-xl cursor-pointer transition duration-150 ${n.isRead ? 'opacity-80' : 'border-2 border-yellow-400'}">
                                         <div class="flex items-start">
                                             <i class="fa-solid fa-bell text-xl ${n.isRead ? 'text-gray-400' : 'text-yellow-400'} mr-3 mt-1"></i>
                                             <div class="flex-grow">
                                                 <p class="font-bold ${n.isRead ? 'text-gray-200' : 'text-white'}">${n.title}</p>
                                                 <p class="text-sm text-gray-400">${n.message}</p>
-                                                ${n.imageURL ? `
+                                                ${n.imageURL ? 
                                                     <img src="${n.imageURL}" onerror="this.src='https://placehold.co/100x50/374151/ffffff?text=Image'" class="mt-2 rounded-lg max-h-20 object-contain border border-gray-600" alt="">
                                                     <a href="${n.imageURL}" target="_blank" onclick="event.stopPropagation();" class="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"><i class="fa-solid fa-expand-alt mr-1"></i> ပုံကြီးချဲ့ကြည့်ရန်</a>
-                                                ` : ''}
+                                                 : ''}
                                                 <p class="text-xs text-gray-500 mt-2">${date}</p>
                                             </div>
                                         </div>
                                     </div>
-                                `;
+                                ;
                             }).join('')
                         }
                     </div>
                 </div>
-            `;
+            ;
         };
         window.renderInbox = renderInbox;
 
@@ -1210,9 +1360,9 @@
 
         const renderProfile = () => {
             const content = document.getElementById('content-area');
-            const user = auth.currentUser;
+            const user = account.current();
             const userEmail = user?.email || 'N/A';
-            const userDisplayName = user?.displayName || '';
+            const userDisplayName = user?.name || '';
 
             content.innerHTML = `
                 <div class="space-y-6">
@@ -1223,7 +1373,9 @@
                         <div class="space-y-3">
                             <p><strong>Username:</strong> ${userDisplayName || 'N/A'}</p>
                             <p><strong>Email:</strong> ${userEmail}</p>
-                            <p><strong>User ID:</strong> ${userId || 'N/A'}</p>
+
+Wai Yan, [29/11/2025 18:50]
+<p><strong>User ID:</strong> ${userId || 'N/A'}</p>
                         </div>
                         
                         <form id="update-profile-form" onsubmit="event.preventDefault(); updateProfileName()" class="mt-4 pt-4 border-t border-gray-600">
@@ -1260,7 +1412,7 @@
                         </button>
                     </div>
                 </div>
-            `;
+            ;
         };
         window.renderProfile = renderProfile;
 
@@ -1268,11 +1420,11 @@
             if (userTransfers.length === 0) return '<p class="text-gray-400 text-center">သင် ငွေလွဲထားသော စာရင်းများ မရှိပါ</p>';
 
             return userTransfers.map(t => {
-                const date = t.timestamp ? t.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
+                const date = t.timestamp ? new Date(t.timestamp).toLocaleString('my-MM') : 'N/A';
                 const statusColor = t.status === 'Completed' ? 'bg-green-600' : (t.status === 'Pending' ? 'bg-yellow-600' : 'bg-red-600');
                 const transferTypeLabel = t.transferType === 'home' ? t('typeHome') : t('typeAccount');
 
-                return `
+                return 
                     <div class="card p-3 rounded-xl">
                         <div class="flex justify-between items-center">
                             <div>
@@ -1290,13 +1442,14 @@
         };
         window.renderProfileTransfers = renderProfileTransfers;
 
-        const updateProfileName = async () => {
+Wai Yan, [29/11/2025 18:50]
+const updateProfileName = async () => {
             const usernameInput = document.getElementById('usernameInput').value.trim();
             if (!usernameInput) return showMessage('Username ဖြည့်သွင်းပါ', 'error');
 
             document.getElementById('loading-overlay').classList.remove('hidden');
             try {
-                await updateProfile(auth.currentUser, { displayName: usernameInput });
+                await account.updateName(usernameInput);
                 showMessage('Username အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။');
                 // Re-render to show updated name
                 showScreen('profile');
@@ -1308,7 +1461,6 @@
             }
         };
         window.updateProfileName = updateProfileName;
-
 
         // --- Core Application Logic ---
 
@@ -1334,7 +1486,7 @@
             });
 
             // Set active navigation style
-            const activeBtn = document.querySelector(`[onclick="showScreen('${screenName}')"]`);
+            const activeBtn = document.querySelector([onclick="showScreen('${screenName}')"]);
             if (activeBtn) {
                 if (screenName === 'admin') {
                     activeBtn.classList.add('text-red-400');
@@ -1346,7 +1498,7 @@
             }
 
             const content = document.getElementById('content-area');
-            content.innerHTML = `<p class="text-center text-gray-500">${t('loading')}...</p>`;
+            content.innerHTML = <p class="text-center text-gray-500">${t('loading')}...</p>;
 
             switch (screenName) {
                 case 'home':
@@ -1377,7 +1529,7 @@
         };
 
         // Start initialization
-        initFirebase();
+        initAppwrite();
     </script>
 </body>
 </html>
