@@ -1,4 +1,3 @@
-Wai Yan, [29/11/2025 18:50]
 <!DOCTYPE html>
 <html lang="my">
 <head>
@@ -99,7 +98,7 @@ Wai Yan, [29/11/2025 18:50]
         <footer id="nav-footer" class="sticky bottom-0 w-full max-w-xl mx-auto bg-gray-800 border-t border-gray-700 p-2 shadow-lg">
             <div class="flex justify-around text-xs font-medium" id="nav-container">
 
-Wai Yan, [29/11/2025 18:50]
+
 <!-- Nav items will be generated here -->
             </div>
         </footer>
@@ -194,7 +193,7 @@ Wai Yan, [29/11/2025 18:50]
             const box = document.getElementById('message-box');
             const color = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
 
-Wai Yan, [29/11/2025 18:50]
+
 const html = 
                 <div class="${color} text-white p-3 rounded-lg shadow-xl mb-3 text-sm" style="min-width: 250px;">
                     ${msg}
@@ -288,7 +287,7 @@ const html =
                     isAuthReady = true;
                     updateStaticText();
 
-Wai Yan, [29/11/2025 18:50]
+
 loadRates();
                     loadAdminBankInfo();
                     loadTransfers();
@@ -360,7 +359,7 @@ loadRates();
                 } else {
                     await account.create(email, password, username);
 
-Wai Yan, [29/11/2025 18:50]
+
 await account.createEmailSession(email, password);
                     const user = await account.get();
                     handleAuthStateChange(user);
@@ -437,7 +436,7 @@ await account.createEmailSession(email, password);
                 try {
                     const response = await databases.getDocument(
 
-Wai Yan, [29/11/2025 18:50]
+
 APPWRITE_CONFIG.databaseId,
                         PUBLIC_DATA_PATH,
                         'rates'
@@ -526,7 +525,7 @@ APPWRITE_CONFIG.databaseId,
         
         // --- Transfers and Notifications ---
 
-Wai Yan, [29/11/2025 18:50]
+
 const loadTransfers = () => {
             if (!isAuthReady || !userId) return;
             
@@ -621,7 +620,7 @@ const loadTransfers = () => {
                     <p class="text-sm font-semibold text-emerald-400">${t('rateTitle')}</p>
                     <p class="text-xs text-gray-400">နောက်ဆုံး အပ်ဒိတ်: ${lastUpdated}</p>
 
-Wai Yan, [29/11/2025 18:50]
+
 <!-- Home Delivery Rate Card (Updated Title) -->
                     <div class="card p-6 rounded-xl space-y-4 border border-red-500/50">
                         <h2 class="text-lg font-bold text-red-400">${t('homeDeliveryRateTitle')} (${t('thbToMmk')}သာ)</h2>
@@ -749,7 +748,7 @@ window.renderHome = renderHome;
             try {
                 await databases.updateDocument(
 
-Wai Yan, [29/11/2025 18:50]
+
 APPWRITE_CONFIG.databaseId,
                     PUBLIC_DATA_PATH,
                     'rates',
@@ -830,7 +829,7 @@ APPWRITE_CONFIG.databaseId,
             } finally {
                 document.getElementById('loading-overlay').classList.add('hidden');
 
-Wai Yan, [29/11/2025 18:50]
+
 }
         };
         window.updateBankImages = updateBankImages;
@@ -890,7 +889,7 @@ Wai Yan, [29/11/2025 18:50]
                                         <input type="text" id="senderName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Aung Aung">
                                     </div>
 
-Wai Yan, [29/11/2025 18:50]
+
 <div>
                                         <label for="receiverName" class="block text-sm font-medium">ငွေလက်ခံမည့်သူအမည်</label>
                                         <input type="text" id="receiverName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Ma Ma">
@@ -935,7 +934,7 @@ Wai Yan, [29/11/2025 18:50]
                                     <input type="file" id="receiptFile" accept="image/*" required class="mt-1 w-full p-2 border rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-emerald-400 hover:file:bg-gray-500">
                                     <p class="text-xs text-red-400 mt-1">** လွဲပြီးကြောင်း အတည်ပြုရန်အတွက် ပုံဖိုင်ကို မဖြစ်မနေ ထည့်သွင်းပေးရပါမည်။</p>
 
-Wai Yan, [29/11/2025 18:50]
+
 </div>
                                 
                             </div>
@@ -1021,7 +1020,7 @@ Wai Yan, [29/11/2025 18:50]
         const submitTransfer = async (transferType) => {
             if (!userId) return showMessage('အသုံးပြုသူအချက်အလက် မရှိပါ', 'error');
 
-Wai Yan, [29/11/2025 18:50]
+
 const form = document.getElementById('transfer-form');
             const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
             const senderName = document.getElementById('senderName').value;
@@ -1100,7 +1099,7 @@ const form = document.getElementById('transfer-form');
                 console.error("Error in transfer process (Upload or Database): ", e);
                 let errorMessage = 'ငွေလွဲမှု တောင်းဆိုချက် ပို့ရာတွင် အမှားရှိပါသည် (သို့) ပုံတင်ရာတွင် ပြဿနာရှိပါသည်။ Console ကို စစ်ဆေးပါ (Security Rules ပြဿနာ ဖြစ်နိုင်သည်)။';
 
-Wai Yan, [29/11/2025 18:50]
+
 showMessage(errorMessage, 'error');
             } finally {
                 // Ensure loading spinner is always hidden, regardless of success or failure
@@ -1165,7 +1164,7 @@ showMessage(errorMessage, 'error');
                         <p><strong>ငွေလွဲသူ (Name):</strong> ${transfer.senderName}</p>
                         <p><strong>Email:</strong> ${transfer.senderEmail}</p>
 
-Wai Yan, [29/11/2025 18:50]
+
 <p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
                         <p><strong>လက်ခံသူ (Name):</strong> ${transfer.receiverName}</p>
                         <p><strong>Phone (MM):</strong> ${transfer.receiverPhoneMM}</p>
@@ -1224,7 +1223,7 @@ Wai Yan, [29/11/2025 18:50]
 
             document.getElementById('loading-overlay').classList.remove('hidden');
 
-Wai Yan, [29/11/2025 18:50]
+
 let replyImageURL = '';
             
             try {
@@ -1307,7 +1306,7 @@ let replyImageURL = '';
                 showMessage('ငွေလွဲမှု ပြီးဆုံးကြောင်း အောင်မြင်စွာ အတည်ပြုပြီးပါပြီ။');
                 showScreen('admin');
 
-Wai Yan, [29/11/2025 18:50]
+
 } catch (e) {
                 console.error("Error completing transfer: ", e);
                 showMessage('အတည်ပြုရာတွင် အမှားရှိသည်', 'error');
@@ -1374,7 +1373,7 @@ Wai Yan, [29/11/2025 18:50]
                             <p><strong>Username:</strong> ${userDisplayName || 'N/A'}</p>
                             <p><strong>Email:</strong> ${userEmail}</p>
 
-Wai Yan, [29/11/2025 18:50]
+
 <p><strong>User ID:</strong> ${userId || 'N/A'}</p>
                         </div>
                         
@@ -1442,7 +1441,7 @@ Wai Yan, [29/11/2025 18:50]
         };
         window.renderProfileTransfers = renderProfileTransfers;
 
-Wai Yan, [29/11/2025 18:50]
+
 const updateProfileName = async () => {
             const usernameInput = document.getElementById('usernameInput').value.trim();
             if (!usernameInput) return showMessage('Username ဖြည့်သွင်းပါ', 'error');
