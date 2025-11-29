@@ -1,147 +1,114 @@
 // --- Appwrite Setup ---
-const client = new Appwrite.Client();
-const database = new Appwrite.Databases(client);
-const storage = new Appwrite.Storage();
+const client = new window.Appwrite.Client();
+const account = new window.Appwrite.Account(client);
+const database = new window.Appwrite.Database(client);
+const storage = new window.Appwrite.Storage();
 
 client
     .setEndpoint('https://sgp.cloud.appwrite.io/v1')
     .setProject('692ab4ee0030433b4b61');
 
-const DATABASE_ID = '692abb320000cc971136';
 const TRANSFER_COLLECTION = 'wai118234';
+const USER_COLLECTION = 'yan118234';
 const NOTIFICATION_COLLECTION = 'soe118234';
 const STORAGE_BUCKET = 'waiyansoe118234';
 
-// --- Global State ---
+// --- Global ---
 let currentScreen = 'home';
-let userTransfers = [];
-let userNotifications = [];
+let currentUser = null;
+
+// --- Loading ---
+const showLoading = () => document.getElementById('loading-overlay').classList.remove('hidden');
+const hideLoading = () => document.getElementById('loading-overlay').classList.add('hidden');
 
 // --- Utils ---
-const showMessage = (msg,type='info')=>alert(msg);
-const showScreen = (screen)=>{
-    currentScreen=screen;
-    if(screen==='home') renderHome();
-    if(screen==='transfer') renderTransfer();
-    if(screen==='inbox') renderInbox();
-    if(screen==='profile') renderProfile();
-    if(screen==='admin') renderAdminPanel();
-};
+const showMessage = (msg) => alert(msg);
 
-// --- Home ---
-const renderHome=()=>document.getElementById('content-area').innerHTML=`<h2>Home</h2><p>Welcome Guest</p>`;
+// --- Navigation ---
+function showScreen(screen){
+    currentScreen = screen;
+    const content = document.getElementById('content-area');
+    content.innerHTML = `<p class="text-center">Loading ${screen}...</p>`;
 
-// --- Transfer ---
-const renderTransfer=()=>{
-    document.getElementById('content-area').innerHTML=`
-    <h2>Transfer</h2>
-    <form id="transfer-form">
-        <input type="text" id="senderName" placeholder="Sender Name" required>
-        <input type="text" id="receiverName" placeholder="Receiver Name" required>
-        <input type="number" id="amountInput" placeholder="Amount" required>
-        <select id="amountDirection">
-            <option value="THB_MMK">THB ➜ MMK</option>
-            <option value="MMK_THB">MMK ➜ THB</option>
-        </select>
-        <select id="transferType">
-            <option value="account">Account</option>
-            <option value="home">Home Delivery</option>
-        </select>
-        <input type="text" id="deliveryAddress" placeholder="Delivery Address (if home)">
-        <input type="file" id="receiptFile" required>
-        <button type="button" onclick="submitTransfer()">Submit Transfer</button>
-    </form>
-    <h3>Your Transfer History</h3>
-    <div id="transfer-history"></div>
+    switch(screen){
+        case 'home': renderHome(); break;
+        case 'transfer': renderTransfer(); break;
+        case 'inbox': renderInbox(); break;
+        case 'profile': renderProfile(); break;
+        case 'admin': renderAdmin(); break;
+        default: renderHome();
+    }
+}
+
+// --- Screens ---
+function renderHome(){
+    document.getElementById('content-area').innerHTML = `
+        <h2>Home</h2>
+        <p>Welcome to Myanmar Transfer App</p>
     `;
-    loadUserTransfers();
-};
+}
 
-const submitTransfer=async()=>{
-    const senderName=document.getElementById('senderName').value;
-    const receiverName=document.getElementById('receiverName').value;
-    const amount=parseFloat(document.getElementById('amountInput').value);
-    const amountDirection=document.getElementById('amountDirection').value;
-    const transferType=document.getElementById('transferType').value;
-    const deliveryAddress=document.getElementById('deliveryAddress').value || 'N/A';
-    const receiptFile=document.getElementById('receiptFile').files[0];
+function renderTransfer(){
+    document.getElementById('content-area').innerHTML = `
+        <h2>Transfer Money</h2>
+        <form id="transferForm">
+            <input type="text" id="senderName" placeholder="Sender Name" required><br><br>
+            <input type="text" id="receiverName" placeholder="Receiver Name" required><br><br>
+            <input type="number" id="amountInput" placeholder="Amount" required><br><br>
+            <input type="file" id="receiptFile" accept="image/*" required><br><br>
+            <button type="submit">Submit Transfer</button>
+        </form>
+    `;
+    document.getElementById('transferForm').addEventListener('submit', submitTransfer);
+}
 
-    if(!senderName||!receiverName||!amount||!receiptFile) return showMessage('All fields required','error');
+async function submitTransfer(e){
+    e.preventDefault();
+    const senderName = document.getElementById('senderName').value;
+    const receiverName = document.getElementById('receiverName').value;
+    const amount = parseFloat(document.getElementById('amountInput').value);
+    const receiptFile = document.getElementById('receiptFile').files[0];
 
-    try{
-        const fileID=`${Date.now()}_${receiptFile.name}`;
-        const uploadedFile=await storage.createFile(STORAGE_BUCKET,fileID,receiptFile);
+    if(!senderName || !receiverName || !amount || !receiptFile){
+        return showMessage('Fill all fields and choose receipt image.');
+    }
 
-        const THB_TO_MMK=50; const MMK_TO_THB=1/50;
-        let amountTHB, amountMMK;
-        if(amountDirection==='THB_MMK'){ amountTHB=amount; amountMMK=amount*THB_TO_MMK; }
-        else { amountMMK=amount; amountTHB=amount*MMK_TO_THB; }
+    showLoading();
 
-        await database.createDocument(DATABASE_ID,TRANSFER_COLLECTION,'unique()',{
-            senderId:'guest',
+    try {
+        const uploaded = await storage.createFile(STORAGE_BUCKET, 'unique()', receiptFile);
+        const receiptURL = `https://sgp.cloud.appwrite.io/v1/storage/buckets/${STORAGE_BUCKET}/files/${uploaded.$id}/view`;
+
+        await database.createDocument(TRANSFER_COLLECTION, 'unique()', {
             senderName,
             receiverName,
-            transferType,
-            deliveryAddress,
-            amountTHB,
-            amountMMK,
-            amountDirection,
-            receiptFileId:uploadedFile.$id,
-            status:'Pending',
-            timestamp:new Date().toISOString()
+            amount,
+            receiptURL,
+            status: 'Pending',
+            createdAt: new Date().toISOString()
         });
 
-        showMessage('Transfer submitted successfully!');
-        document.getElementById('transfer-form').reset();
-        loadUserTransfers();
-    }catch(err){ console.error(err); showMessage('Error submitting transfer','error'); }
-};
+        showMessage('Transfer submitted!');
+        showScreen('home');
+    } catch(err){
+        console.error(err);
+        showMessage('Error submitting transfer.');
+    } finally {
+        hideLoading();
+    }
+}
 
-// --- Transfer History (guest only shows all transfers) ---
-const loadUserTransfers=async()=>{
-    try{
-        const response=await database.listDocuments(DATABASE_ID,TRANSFER_COLLECTION);
-        userTransfers=response.documents||[];
-        let html='';
-        userTransfers.forEach(t=>{
-            html+=`<div class="card">
-            <strong>${t.senderName} ➜ ${t.receiverName}</strong>
-            <p>${t.amountTHB} THB / ${t.amountMMK} MMK</p>
-            <p>Status: ${t.status}</p>
-            </div>`;
-        });
-        document.getElementById('transfer-history').innerHTML=html;
-    }catch(err){ console.error(err); }
-};
+function renderInbox(){
+    document.getElementById('content-area').innerHTML = `<h2>Inbox</h2><p>Admin messages here</p>`;
+}
 
-// --- Inbox (guest: shows all notifications) ---
-const renderInbox=async()=>{
-    try{
-        const response=await database.listDocuments(DATABASE_ID,NOTIFICATION_COLLECTION);
-        userNotifications=response.documents||[];
-        let html='<h2>Inbox</h2>';
-        if(userNotifications.length===0){ html+='<p>No messages</p>'; }
-        else{ userNotifications.forEach(n=>{
-            html+=`<div class="card"><strong>${n.title}</strong><p>${n.message}</p>${n.imageURL?`<img src="${n.imageURL}">`:''}</div>`; }); }
-        document.getElementById('content-area').innerHTML=html;
-    }catch(err){ console.error(err); showMessage('Error loading inbox','error'); }
-};
+function renderProfile(){
+    document.getElementById('content-area').innerHTML = `<h2>Profile</h2><p>User info and past transfers</p>`;
+}
 
-// --- Profile ---
-const renderProfile=()=>{ 
-    document.getElementById('content-area').innerHTML=`
-    <h2>Profile</h2>
-    <p>Username: Guest</p>
-    <p>User ID: guest</p>
-    `;
-};
+function renderAdmin(){
+    document.getElementById('content-area').innerHTML = `<h2>Admin Panel</h2><p>Pending transfers list</p>`;
+}
 
-// --- Admin Panel (hidden) ---
-const renderAdminPanel=()=>{
-    document.getElementById('content-area').innerHTML='<h2>Admin Panel</h2><p>Admin access only</p>';
-};
-
-// --- Init ---
-window.onload=()=>{
-    showScreen('home');
-};
+// --- Initialize ---
+document.addEventListener('DOMContentLoaded', ()=> showScreen('home'));
