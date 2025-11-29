@@ -1,27 +1,27 @@
 <!DOCTYPE html>
 <html lang="my">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Money Transfer App</title>
-<link rel="stylesheet" href="styles.css">
-<script src="https://cdn.jsdelivr.net/npm/appwrite@9.0.0/dist/appwrite.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Myanmar Transfer App</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@appwrite/sdk-for-web@8.3.0/dist/appwrite.min.js"></script>
 </head>
 <body>
-<div id="loading-overlay" class="hidden">Loading...</div>
+    <div id="loading-overlay" class="hidden">Loading...</div>
 
-<!-- Navigation -->
-<nav>
-    <button class="nav-button" onclick="showScreen('home')">Home</button>
-    <button class="nav-button" onclick="showScreen('transfer')">Transfer</button>
-    <button class="nav-button" onclick="showScreen('inbox')">Inbox</button>
-    <button class="nav-button" onclick="showScreen('profile')">Profile</button>
-    <button id="admin-nav-button" class="nav-button" onclick="showScreen('admin')">Admin</button>
-</nav>
+    <nav class="nav-bar">
+        <button class="nav-button" onclick="showScreen('home')">Home</button>
+        <button class="nav-button" onclick="showScreen('transfer')">Transfer</button>
+        <button class="nav-button" onclick="showScreen('inbox')">Inbox</button>
+        <button class="nav-button" onclick="showScreen('profile')">Profile</button>
+        <button class="nav-button" onclick="showScreen('admin')">Admin</button>
+    </nav>
 
-<!-- Content -->
-<div id="content-area"></div>
+    <div id="content-area">
+        <p class="text-center">Loading...</p>
+    </div>
 
-<script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
