@@ -97,7 +97,7 @@
         <!-- Navigation Footer -->
         <footer id="nav-footer" class="sticky bottom-0 w-full max-w-xl mx-auto bg-gray-800 border-t border-gray-700 p-2 shadow-lg">
             <div class="flex justify-around text-xs font-medium" id="nav-container">
-<!-- Nav items will be generated here -->
+                <!-- Nav items will be generated here -->
             </div>
         </footer>
     </div>
@@ -110,7 +110,7 @@
         
         // --- Global Variables and Constants ---
         const ADMIN_EMAIL = 'c388925@gmail.com';
-        const APP_ID = typeof app_id !== 'undefined' ? app_id : 'default-app-id';
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         // Appwrite Configuration
         const APPWRITE_CONFIG = {
@@ -190,10 +190,11 @@
         const showMessage = (msg, type = 'success') => {
             const box = document.getElementById('message-box');
             const color = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
-
-
-         const html = 
-                <div class="${color} text-white p-3 rounded-lg shadow-xl mb-3 text-sm" style="min-width: 250px;">${msg}</div>;
+            const html = `
+                <div class="${color} text-white p-3 rounded-lg shadow-xl mb-3 text-sm" style="min-width: 250px;">
+                    ${msg}
+                </div>
+            `;
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
             const messageElement = tempDiv.firstChild;
@@ -206,7 +207,8 @@
                 messageElement.remove();
                 if (box.children.length === 0) {
                     box.classList.remove('translate-x-0');
-                    box.classList.add('translate-x-full');}
+                    box.classList.add('translate-x-full');
+                }
             }, 5000);
         };
         
@@ -217,7 +219,7 @@
                     const blobUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = blobUrl;
-                    a.download = remittance_image_${Date.now()}.png;
+                    a.download = `remittance_image_${Date.now()}.png`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
@@ -261,7 +263,7 @@
             } catch (error) {
                 console.error("Appwrite Initialization Error:", error);
                 document.getElementById('loading-overlay').classList.add('hidden');
-                showMessage(Appwrite အမှား: ${error.message}, 'error');
+                showMessage(`Appwrite အမှား: ${error.message}`, 'error');
             }
         };
 
@@ -271,7 +273,7 @@
                 userEmail = user.email;
                 isAdmin = user.email === ADMIN_EMAIL;
                 
-                document.getElementById('user-info').textContent = ${user.name || user.email} (ID: ${userId.substring(0, 8)}...);
+                document.getElementById('user-info').textContent = `${user.name || user.email} (ID: ${userId.substring(0, 8)}...)`;
                 // Admin button is now handled in updateStaticText/nav bar
                 
                 document.getElementById('auth-screen').classList.add('hidden');
@@ -280,8 +282,6 @@
                 if (!isAuthReady) {
                     isAuthReady = true;
                     updateStaticText();
-
-
                     loadRates();
                     loadAdminBankInfo();
                     loadTransfers();
@@ -305,16 +305,16 @@
 
         const renderAuthScreen = (isLogin = true) => {
             const authScreen = document.getElementById('auth-screen');
-            authScreen.innerHTML = 
+            authScreen.innerHTML = `
                 <div class="card w-full max-w-sm p-8 rounded-xl space-y-6">
                     <h2 class="text-3xl font-bold text-center text-emerald-400">${isLogin ? 'အကောင့်ဝင်ရန်' : 'အကောင့်ဖွင့်ရန်'}</h2>
                     
                     <form id="auth-form" onsubmit="event.preventDefault(); handleAuthSubmit(${isLogin})">
-                        ${!isLogin ? 
+                        ${!isLogin ? `
                             <div>
                                 <label for="username" class="block text-sm font-medium mb-1">Username</label>
                                 <input type="text" id="username" required class="w-full p-3 border rounded-lg" placeholder="သင့်အမည်">
-                            </div> : ''}
+                            </div>` : ''}
                         <div>
                             <label for="email" class="block text-sm font-medium mb-1">Email</label>
                             <input type="email" id="email" required class="w-full p-3 border rounded-lg" placeholder="example@gmail.com">
@@ -333,7 +333,7 @@
                         ${isLogin ? 'အကောင့်မရှိသေးဘူးလား? အကောင့်ဖွင့်ရန်' : 'အကောင့်ရှိပြီးသားလား? အကောင့်ဝင်ရန်'}
                     </button>
                 </div>
-            ;
+            `;
         };
         window.renderAuthScreen = renderAuthScreen;
         
@@ -352,8 +352,6 @@
                     showMessage('အကောင့်ဝင်ခြင်း အောင်မြင်ပါသည်။');
                 } else {
                     await account.create(email, password, username);
-
-
                     await account.createEmailSession(email, password);
                     const user = await account.get();
                     handleAuthStateChange(user);
@@ -387,19 +385,19 @@
         // --- Appwrite Data Handlers & Paths ---
 
         const PUBLIC_DATA_PATH = 'public';
-        const USER_DATA_PATH = (uid) => users/${uid};
+        const USER_DATA_PATH = (uid) => `users/${uid}`;
 
         const updateStaticText = () => {
-            const adminButtonHtml = isAdmin ? 
+            const adminButtonHtml = isAdmin ? `
                 <button onclick="showScreen('admin')" id="admin-nav-button" class="nav-button flex flex-col items-center p-2 rounded-lg text-red-400 hover:text-red-300">
                     <i class="fa-solid fa-screwdriver-wrench text-xl"></i>
                     <span class="mt-1">${t('adminPanel')}</span>
                 </button>
-             : '';
+            ` : '';
 
             // Navigation buttons update
             const navContainer = document.getElementById('nav-container');
-            navContainer.innerHTML = 
+            navContainer.innerHTML = `
                 <button onclick="showScreen('home')" class="nav-button flex flex-col items-center p-2 rounded-lg text-gray-400 hover:text-emerald-500">
                     <i class="fa-solid fa-exchange-alt text-xl"></i>
                     <span class="mt-1">${t('home')}</span>
@@ -418,7 +416,7 @@
                     <span class="mt-1">${t('profile')}</span>
                 </button>
                 ${adminButtonHtml} <!-- Admin button is now here -->
-            ;
+            `;
             showScreen(currentScreen);
         };
         
@@ -429,9 +427,7 @@
             const fetchRates = async () => {
                 try {
                     const response = await databases.getDocument(
-
-
-APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.databaseId,
                         PUBLIC_DATA_PATH,
                         'rates'
                     );
@@ -478,7 +474,7 @@ APPWRITE_CONFIG.databaseId,
             
             fetchRates();
             // Set up real-time updates if needed
-            // client.subscribe(databases.${APPWRITE_CONFIG.databaseId}.collections.${PUBLIC_DATA_PATH}.documents.rates, fetchRates);
+            // client.subscribe(`databases.${APPWRITE_CONFIG.databaseId}.collections.${PUBLIC_DATA_PATH}.documents.rates`, fetchRates);
         };
         
         const loadAdminBankInfo = () => {
@@ -519,8 +515,7 @@ APPWRITE_CONFIG.databaseId,
         
         // --- Transfers and Notifications ---
 
-
-const loadTransfers = () => {
+        const loadTransfers = () => {
             if (!isAuthReady || !userId) return;
             
             const fetchTransfers = async () => {
@@ -562,7 +557,7 @@ const loadTransfers = () => {
                         APPWRITE_CONFIG.databaseId,
                         APPWRITE_CONFIG.notificationCollectionId,
                         [
-                            equal("userId", "${userId}")
+                            `equal("userId", "${userId}")`
                         ]
                     );
                     
@@ -614,8 +609,7 @@ const loadTransfers = () => {
                     <p class="text-sm font-semibold text-emerald-400">${t('rateTitle')}</p>
                     <p class="text-xs text-gray-400">နောက်ဆုံး အပ်ဒိတ်: ${lastUpdated}</p>
 
-
-<!-- Home Delivery Rate Card (Updated Title) -->
+                    <!-- Home Delivery Rate Card (Updated Title) -->
                     <div class="card p-6 rounded-xl space-y-4 border border-red-500/50">
                         <h2 class="text-lg font-bold text-red-400">${t('homeDeliveryRateTitle')} (${t('thbToMmk')}သာ)</h2>
                         <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
@@ -644,7 +638,7 @@ const loadTransfers = () => {
                                     ${transferDirection === 'THB_TO_MMK' ? t('thbToMmk') : t('mmkToThb')}
                                 </p>
                                 <p class="text-xl font-bold text-gray-50 mt-1">
-                                    ${transferDirection === 'THB_TO_MMK' ? ${thbAmount_MMK} ${t('thb')} : 100,000 ${t('mmk')}}
+                                    ${transferDirection === 'THB_TO_MMK' ? `${thbAmount_MMK} ${t('thb')}` : `100,000 ${t('mmk')}`}
                                 </p>
                             </div>
 
@@ -657,7 +651,7 @@ const loadTransfers = () => {
                                     ${transferDirection === 'THB_TO_MMK' ? t('mmk') : t('thb')}
                                 </p>
                                 <p class="text-xl font-bold text-gray-50 mt-1">
-                                    ${transferDirection === 'THB_TO_MMK' ? 100,000 ${t('mmk')} : ${thbAmount_THB} ${t('thb')}}
+                                    ${transferDirection === 'THB_TO_MMK' ? `100,000 ${t('mmk')}` : `${thbAmount_THB} ${t('thb')}`}
                                 </p>
                             </div>
                         </div>
@@ -675,12 +669,10 @@ const loadTransfers = () => {
                 </div>
             `;
         };
-
-
-window.renderHome = renderHome;
+        window.renderHome = renderHome;
         
         const renderAdminBankInfo = () => {
-            return 
+            return `
                 <div class="card p-5 rounded-xl border border-blue-400/50">
                     <h2 class="text-xl font-bold text-blue-400 mb-3">${t('bankInfo')}</h2>
                     <div class="grid grid-cols-2 gap-4">
@@ -689,22 +681,22 @@ window.renderHome = renderHome;
                     </div>
                      ${isAdmin ? renderAdminBankUpdateForm() : ''}
                 </div>
-            ;
+            `;
         };
 
         const renderBankImage = (url, alt, id) => {
-            return 
+            return `
                 <div class="space-y-2">
                     <img id="${id}" src="${url}" onerror="this.src='https://placehold.co/200x100/374151/ffffff?text=${alt}'" class="w-full rounded-lg object-cover border border-gray-600" alt="">
                     <button onclick="downloadImage('${url}')" class="w-full flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
                         <i class="fa-solid fa-download mr-2"></i> ${t('download')}
                     </button>
                 </div>
-            ;
+            `;
         };
 
         const renderAdminRatePanel = () => {
-            return 
+            return `
                 <div class="card p-5 rounded-xl border border-red-400/50">
                     <h2 class="text-xl font-bold text-red-400 mb-3">Admin: ငွေလဲနှုန်းများ ပြင်ဆင်ရန်</h2>
                     <form id="rate-update-form" onsubmit="event.preventDefault(); updateRates()" class="space-y-3">
@@ -723,7 +715,7 @@ window.renderHome = renderHome;
                         <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">နှုန်းထားများ အပ်ဒိတ်လုပ်ရန်</button>
                     </form>
                 </div>
-            ;
+            `;
         };
 
         const updateRates = async () => {
@@ -733,7 +725,7 @@ window.renderHome = renderHome;
             const rateBuyTHB = parseFloat(document.getElementById('rateBuyTHBInput').value);
             const rateHomeDeliveryTHB = parseFloat(document.getElementById('rateHomeDeliveryTHBInput').value);
             
-            if (isNaN(rateBuyMMK)  isNaN(rateBuyTHB)  isNaN(rateHomeDeliveryTHB)) {
+            if (isNaN(rateBuyMMK) || isNaN(rateBuyTHB) || isNaN(rateHomeDeliveryTHB)) {
                 return showMessage('မှန်ကန်သော နှုန်းထားများကို ဖြည့်သွင်းပါ', 'error');
             }
 
@@ -741,9 +733,7 @@ window.renderHome = renderHome;
 
             try {
                 await databases.updateDocument(
-
-
-APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.databaseId,
                     PUBLIC_DATA_PATH,
                     'rates',
                     { 
@@ -764,7 +754,7 @@ APPWRITE_CONFIG.databaseId,
         window.updateRates = updateRates;
         
         const renderAdminBankUpdateForm = () => {
-            return 
+            return `
                 <form id="bank-image-update-form" onsubmit="event.preventDefault(); updateBankImages()" class="mt-4 pt-4 border-t border-gray-600 space-y-3">
                     <h3 class="text-lg font-semibold text-red-400">Admin: ဘဏ်ပုံများ ပြင်ဆင်ရန်</h3>
                     <div>
@@ -777,7 +767,7 @@ APPWRITE_CONFIG.databaseId,
                     </div>
                     <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
                 </form>
-            ;
+            `;
         };
 
         const updateBankImages = async () => {
@@ -791,7 +781,7 @@ APPWRITE_CONFIG.databaseId,
             let updatedURLs = {};
 
             const uploadFile = async (file, slot) => {
-                const fileName = ${APP_ID}_bank_${slot}_${Date.now()}.png;
+                const fileName = `${APP_ID}_bank_${slot}_${Date.now()}.png`;
                 const response = await storage.createFile(
                     APPWRITE_CONFIG.storageBucketId,
                     fileName,
@@ -822,9 +812,7 @@ APPWRITE_CONFIG.databaseId,
                 showMessage(errorMessage, 'error');
             } finally {
                 document.getElementById('loading-overlay').classList.add('hidden');
-
-
-}
+            }
         };
         window.updateBankImages = updateBankImages;
         
@@ -882,9 +870,7 @@ APPWRITE_CONFIG.databaseId,
                                         <label for="senderName" class="block text-sm font-medium">ငွေလွဲမည့်သူအမည်</label>
                                         <input type="text" id="senderName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Aung Aung">
                                     </div>
-
-
-<div>
+                                    <div>
                                         <label for="receiverName" class="block text-sm font-medium">ငွေလက်ခံမည့်သူအမည်</label>
                                         <input type="text" id="receiverName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Ma Ma">
                                     </div>
@@ -927,9 +913,7 @@ APPWRITE_CONFIG.databaseId,
                                     <label for="receiptFile" class="block text-sm font-medium">ငွေပို့ထားသော စလစ်ပုံ ထည့်ရန် (ပုံဖိုင်)</label>
                                     <input type="file" id="receiptFile" accept="image/*" required class="mt-1 w-full p-2 border rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-600 file:text-emerald-400 hover:file:bg-gray-500">
                                     <p class="text-xs text-red-400 mt-1">** လွဲပြီးကြောင်း အတည်ပြုရန်အတွက် ပုံဖိုင်ကို မဖြစ်မနေ ထည့်သွင်းပေးရပါမည်။</p>
-
-
-</div>
+                                </div>
                                 
                             </div>
                             
@@ -937,7 +921,7 @@ APPWRITE_CONFIG.databaseId,
                         </form>
                     </div>
                 </div>
-            ;
+            `;
             setTimeout(() => { updateCalculatedAmount(); }, 0);
             document.getElementById('amountInput').addEventListener('input', updateCalculatedAmount);
             document.getElementById('amountDirection').addEventListener('change', updateCalculatedAmount);
@@ -950,7 +934,7 @@ APPWRITE_CONFIG.databaseId,
             const output = document.getElementById('calculated-amount');
             
             if (isNaN(input) || input <= 0) {
-                output.textContent = ရရှိမည့်ပမာဏ: 0.00;
+                output.textContent = `ရရှိမည့်ပမာဏ: 0.00`;
                 return;
             }
 
@@ -966,7 +950,7 @@ APPWRITE_CONFIG.databaseId,
                 toCurrency = 'ဘတ်';
             }
             
-            output.textContent = ${input.toFixed(2)} ${fromCurrency} သည် ရရှိမည့်ပမာဏ: ${result.toFixed(2)} ${toCurrency} ဖြစ်သည်;
+            output.textContent = `${input.toFixed(2)} ${fromCurrency} သည် ရရှိမည့်ပမာဏ: ${result.toFixed(2)} ${toCurrency} ဖြစ်သည်`;
         };
         window.updateCalculatedAmount = updateCalculatedAmount;
         
@@ -975,10 +959,10 @@ APPWRITE_CONFIG.databaseId,
             // Update Tab Styles
             document.getElementById('tab-account').classList.remove('active');
             document.getElementById('tab-home').classList.remove('active');
-            document.getElementById(tab-${tab}).classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
             
             // Update Form Fields
-            document.getElementById('transfer-form-title').textContent = ${tab === 'account' ? t('transferAccountTab') : t('transferHomeTab')} ဖောင်`;
+            document.getElementById('transfer-form-title').textContent = `${tab === 'account' ? t('transferAccountTab') : t('transferHomeTab')} ဖောင်`;
             
             const accountTypeField = document.getElementById('account-type-field');
             const accountTypeInput = document.getElementById('transferAccountType');
@@ -1014,8 +998,7 @@ APPWRITE_CONFIG.databaseId,
         const submitTransfer = async (transferType) => {
             if (!userId) return showMessage('အသုံးပြုသူအချက်အလက် မရှိပါ', 'error');
 
-
-const form = document.getElementById('transfer-form');
+            const form = document.getElementById('transfer-form');
             const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
             const senderName = document.getElementById('senderName').value;
             const senderPhoneTH = document.getElementById('senderPhoneTH').value;
@@ -1031,7 +1014,7 @@ const form = document.getElementById('transfer-form');
                 deliveryAddress = document.getElementById('deliveryAddress').value;
             }
             
-            if (isNaN(amountInput)  amountInput <= 0  !receiptFile) {
+            if (isNaN(amountInput) || amountInput <= 0 || !receiptFile) {
                 return showMessage('ပမာဏ သို့မဟုတ် စလစ်ပုံဖိုင်ကို မှန်ကန်စွာ ဖြည့်သွင်းပါ', 'error');
             }
 
@@ -1050,7 +1033,7 @@ const form = document.getElementById('transfer-form');
                 // --- 1. Upload Logic ---
                 let receiptImageURL = '';
                 const fileExtension = receiptFile.name.split('.').pop();
-                const fileName = ${userId}_${Date.now()}_receipt.${fileExtension};
+                const fileName = `${userId}_${Date.now()}_receipt.${fileExtension}`;
                 
                 const uploadResult = await storage.createFile(
                     APPWRITE_CONFIG.storageBucketId,
@@ -1092,9 +1075,7 @@ const form = document.getElementById('transfer-form');
             } catch (e) {
                 console.error("Error in transfer process (Upload or Database): ", e);
                 let errorMessage = 'ငွေလွဲမှု တောင်းဆိုချက် ပို့ရာတွင် အမှားရှိပါသည် (သို့) ပုံတင်ရာတွင် ပြဿနာရှိပါသည်။ Console ကို စစ်ဆေးပါ (Security Rules ပြဿနာ ဖြစ်နိုင်သည်)။';
-
-
-showMessage(errorMessage, 'error');
+                showMessage(errorMessage, 'error');
             } finally {
                 // Ensure loading spinner is always hidden, regardless of success or failure
                 document.getElementById('loading-overlay').classList.add('hidden');
@@ -1110,7 +1091,7 @@ showMessage(errorMessage, 'error');
             const pendingTransfers = adminTransfers.filter(t => t.status === 'Pending');
             const content = document.getElementById('content-area');
 
-            content.innerHTML = 
+            content.innerHTML = `
                 <div class="space-y-6">
                     <h2 class="text-2xl font-bold text-red-400">${t('adminPendingTitle')} (${pendingTransfers.length})</h2>
                     <p class="text-sm text-gray-400">စစ်ဆေးရန်ကျန်ရှိသော စာရင်းများ</p>
@@ -1118,7 +1099,7 @@ showMessage(errorMessage, 'error');
                     <div id="admin-transfers-list" class="space-y-3">
                         ${pendingTransfers.length === 0 ? 
                             '<p class="text-gray-400 p-4 card rounded-lg text-center">စစ်ဆေးရန် ငွေလွဲမှုများ မရှိပါ</p>' :
-                            pendingTransfers.map(t => 
+                            pendingTransfers.map(t => `
                                 <div onclick="renderAdminTransferDetail('${t.id}')" class="card p-4 rounded-xl cursor-pointer hover:bg-gray-700 transition duration-150">
                                     <div class="flex justify-between items-center">
                                         <div>
@@ -1133,11 +1114,11 @@ showMessage(errorMessage, 'error');
                                         </div>
                                     </div>
                                 </div>
-                            ).join('')
+                            `).join('')
                         }
                     </div>
                 </div>
-            ;
+            `;
         };
         window.renderAdminPanel = renderAdminPanel;
 
@@ -1157,9 +1138,7 @@ showMessage(errorMessage, 'error');
                     <div class="card p-5 rounded-xl space-y-3">
                         <p><strong>ငွေလွဲသူ (Name):</strong> ${transfer.senderName}</p>
                         <p><strong>Email:</strong> ${transfer.senderEmail}</p>
-
-
-<p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
+                        <p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
                         <p><strong>လက်ခံသူ (Name):</strong> ${transfer.receiverName}</p>
                         <p><strong>Phone (MM):</strong> ${transfer.receiverPhoneMM}</p>
                         <p><strong>Amount:</strong> ${transfer.amountTHB.toFixed(2)} ${t('thb')} ➜ ${transfer.amountMMK.toFixed(2)} ${t('mmk')}</p>
@@ -1217,13 +1196,12 @@ showMessage(errorMessage, 'error');
 
             document.getElementById('loading-overlay').classList.remove('hidden');
 
-
-let replyImageURL = '';
+            let replyImageURL = '';
             
             try {
                 if (imageFile) {
                     const fileExtension = imageFile.name.split('.').pop();
-                    const fileName = ${transferId}_admin_reply_${Date.now()}.${fileExtension};
+                    const fileName = `${transferId}_admin_reply_${Date.now()}.${fileExtension}`;
                     const uploadResult = await storage.createFile(
                         APPWRITE_CONFIG.storageBucketId,
                         fileName,
@@ -1239,7 +1217,7 @@ let replyImageURL = '';
                     'unique()',
                     {
                         userId: transfer.senderId,
-                        title: Admin မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်,
+                        title: `Admin မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်`,
                         message: message || 'Admin မှ သင့်အား ပုံဖြင့် အကြောင်းပြန်ကြားထားပါသည်။',
                         imageURL: replyImageURL,
                         isRead: false,
@@ -1289,8 +1267,8 @@ let replyImageURL = '';
                     'unique()',
                     {
                         userId: transfer.senderId,
-                        title: ✅ ငွေလွဲမှု အောင်မြင်ပါသည်။,
-                        message: သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးကြောင်း အတည်ပြုပါသည်။,
+                        title: `✅ ငွေလွဲမှု အောင်မြင်ပါသည်။`,
+                        message: `သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးကြောင်း အတည်ပြုပါသည်။`,
                         isRead: false,
                         timestamp: new Date().toISOString(),
                         relatedTransferId: transferId
@@ -1299,9 +1277,7 @@ let replyImageURL = '';
 
                 showMessage('ငွေလွဲမှု ပြီးဆုံးကြောင်း အောင်မြင်စွာ အတည်ပြုပြီးပါပြီ။');
                 showScreen('admin');
-
-
-} catch (e) {
+            } catch (e) {
                 console.error("Error completing transfer: ", e);
                 showMessage('အတည်ပြုရာတွင် အမှားရှိသည်', 'error');
             } finally {
@@ -1315,7 +1291,7 @@ let replyImageURL = '';
         const renderInbox = () => {
             const content = document.getElementById('content-area');
             
-            content.innerHTML = 
+            content.innerHTML = `
                 <div class="space-y-6" id="inbox-content">
                     <h2 class="text-2xl font-bold text-emerald-400">${t('inbox')}</h2>
                     <p class="text-sm text-gray-400">Admin မှ ပို့သော မက်ဆေ့ခ်ျများ</p>
@@ -1325,27 +1301,27 @@ let replyImageURL = '';
                             '<p class="text-gray-400 p-4 card rounded-lg text-center">အဝင်စာ မရှိပါ</p>' :
                             userNotifications.map(n => {
                                 const date = n.timestamp ? new Date(n.timestamp).toLocaleString('my-MM') : 'N/A';
-                                return 
+                                return `
                                     <div onclick="markNotificationAsRead('${n.id}')" class="card p-4 rounded-xl cursor-pointer transition duration-150 ${n.isRead ? 'opacity-80' : 'border-2 border-yellow-400'}">
                                         <div class="flex items-start">
                                             <i class="fa-solid fa-bell text-xl ${n.isRead ? 'text-gray-400' : 'text-yellow-400'} mr-3 mt-1"></i>
                                             <div class="flex-grow">
                                                 <p class="font-bold ${n.isRead ? 'text-gray-200' : 'text-white'}">${n.title}</p>
                                                 <p class="text-sm text-gray-400">${n.message}</p>
-                                                ${n.imageURL ? 
+                                                ${n.imageURL ? `
                                                     <img src="${n.imageURL}" onerror="this.src='https://placehold.co/100x50/374151/ffffff?text=Image'" class="mt-2 rounded-lg max-h-20 object-contain border border-gray-600" alt="">
                                                     <a href="${n.imageURL}" target="_blank" onclick="event.stopPropagation();" class="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"><i class="fa-solid fa-expand-alt mr-1"></i> ပုံကြီးချဲ့ကြည့်ရန်</a>
-                                                 : ''}
+                                                ` : ''}
                                                 <p class="text-xs text-gray-500 mt-2">${date}</p>
                                             </div>
                                         </div>
                                     </div>
-                                ;
+                                `;
                             }).join('')
                         }
                     </div>
                 </div>
-            ;
+            `;
         };
         window.renderInbox = renderInbox;
 
@@ -1366,9 +1342,7 @@ let replyImageURL = '';
                         <div class="space-y-3">
                             <p><strong>Username:</strong> ${userDisplayName || 'N/A'}</p>
                             <p><strong>Email:</strong> ${userEmail}</p>
-
-
-<p><strong>User ID:</strong> ${userId || 'N/A'}</p>
+                            <p><strong>User ID:</strong> ${userId || 'N/A'}</p>
                         </div>
                         
                         <form id="update-profile-form" onsubmit="event.preventDefault(); updateProfileName()" class="mt-4 pt-4 border-t border-gray-600">
@@ -1405,7 +1379,7 @@ let replyImageURL = '';
                         </button>
                     </div>
                 </div>
-            ;
+            `;
         };
         window.renderProfile = renderProfile;
 
@@ -1417,7 +1391,7 @@ let replyImageURL = '';
                 const statusColor = t.status === 'Completed' ? 'bg-green-600' : (t.status === 'Pending' ? 'bg-yellow-600' : 'bg-red-600');
                 const transferTypeLabel = t.transferType === 'home' ? t('typeHome') : t('typeAccount');
 
-                return 
+                return `
                     <div class="card p-3 rounded-xl">
                         <div class="flex justify-between items-center">
                             <div>
@@ -1435,8 +1409,7 @@ let replyImageURL = '';
         };
         window.renderProfileTransfers = renderProfileTransfers;
 
-
-const updateProfileName = async () => {
+        const updateProfileName = async () => {
             const usernameInput = document.getElementById('usernameInput').value.trim();
             if (!usernameInput) return showMessage('Username ဖြည့်သွင်းပါ', 'error');
 
@@ -1479,7 +1452,7 @@ const updateProfileName = async () => {
             });
 
             // Set active navigation style
-            const activeBtn = document.querySelector([onclick="showScreen('${screenName}')"]);
+            const activeBtn = document.querySelector(`[onclick="showScreen('${screenName}')"]`);
             if (activeBtn) {
                 if (screenName === 'admin') {
                     activeBtn.classList.add('text-red-400');
@@ -1491,7 +1464,7 @@ const updateProfileName = async () => {
             }
 
             const content = document.getElementById('content-area');
-            content.innerHTML = <p class="text-center text-gray-500">${t('loading')}...</p>;
+            content.innerHTML = `<p class="text-center text-gray-500">${t('loading')}...</p>`;
 
             switch (screenName) {
                 case 'home':
