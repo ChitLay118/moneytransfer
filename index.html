@@ -97,8 +97,6 @@
         <!-- Navigation Footer -->
         <footer id="nav-footer" class="sticky bottom-0 w-full max-w-xl mx-auto bg-gray-800 border-t border-gray-700 p-2 shadow-lg">
             <div class="flex justify-around text-xs font-medium" id="nav-container">
-
-
 <!-- Nav items will be generated here -->
             </div>
         </footer>
@@ -194,11 +192,8 @@
             const color = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
 
 
-const html = 
-                <div class="${color} text-white p-3 rounded-lg shadow-xl mb-3 text-sm" style="min-width: 250px;">
-                    ${msg}
-                </div>
-            ;
+         const html = 
+                <div class="${color} text-white p-3 rounded-lg shadow-xl mb-3 text-sm" style="min-width: 250px;">${msg}</div>;
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
             const messageElement = tempDiv.firstChild;
@@ -211,8 +206,7 @@ const html =
                 messageElement.remove();
                 if (box.children.length === 0) {
                     box.classList.remove('translate-x-0');
-                    box.classList.add('translate-x-full');
-                }
+                    box.classList.add('translate-x-full');}
             }, 5000);
         };
         
@@ -288,7 +282,7 @@ const html =
                     updateStaticText();
 
 
-loadRates();
+                    loadRates();
                     loadAdminBankInfo();
                     loadTransfers();
                     loadNotifications();
@@ -360,7 +354,7 @@ loadRates();
                     await account.create(email, password, username);
 
 
-await account.createEmailSession(email, password);
+                    await account.createEmailSession(email, password);
                     const user = await account.get();
                     handleAuthStateChange(user);
                     showMessage('အကောင့်ဖွင့်ခြင်း အောင်မြင်ပါသည်။');
