@@ -1,6 +1,5 @@
 // --- Appwrite Setup ---
 const client = new Appwrite.Client();
-const account = new Appwrite.Account(client);
 const database = new Appwrite.Databases(client);
 const storage = new Appwrite.Storage();
 
@@ -10,18 +9,13 @@ client
 
 const DATABASE_ID = '692abb320000cc971136';
 const TRANSFER_COLLECTION = 'wai118234';
-const USER_COLLECTION = 'yan118234';
 const NOTIFICATION_COLLECTION = 'soe118234';
 const STORAGE_BUCKET = 'waiyansoe118234';
-const ADMIN_EMAIL = 'admin@example.com'; // Admin Email check
 
 // --- Global State ---
-let currentUser = null;
-let isAdmin = false;
 let currentScreen = 'home';
 let userTransfers = [];
 let userNotifications = [];
-let adminTransfers = [];
 
 // --- Utils ---
 const showMessage = (msg,type='info')=>alert(msg);
@@ -35,7 +29,7 @@ const showScreen = (screen)=>{
 };
 
 // --- Home ---
-const renderHome=()=>document.getElementById('content-area').innerHTML=`<h2>Home</h2><p>Welcome ${currentUser?.name||'Guest'}</p>`;
+const renderHome=()=>document.getElementById('content-area').innerHTML=`<h2>Home</h2><p>Welcome Guest</p>`;
 
 // --- Transfer ---
 const renderTransfer=()=>{
@@ -84,7 +78,7 @@ const submitTransfer=async()=>{
         else { amountMMK=amount; amountTHB=amount*MMK_TO_THB; }
 
         await database.createDocument(DATABASE_ID,TRANSFER_COLLECTION,'unique()',{
-            senderId:currentUser?.$id||'guest',
+            senderId:'guest',
             senderName,
             receiverName,
             transferType,
@@ -103,10 +97,10 @@ const submitTransfer=async()=>{
     }catch(err){ console.error(err); showMessage('Error submitting transfer','error'); }
 };
 
-// --- User Transfer History ---
+// --- Transfer History (guest only shows all transfers) ---
 const loadUserTransfers=async()=>{
     try{
-        const response=await database.listDocuments(DATABASE_ID,TRANSFER_COLLECTION,[Appwrite.Query.equal('senderId',currentUser?.$id||'guest')]);
+        const response=await database.listDocuments(DATABASE_ID,TRANSFER_COLLECTION);
         userTransfers=response.documents||[];
         let html='';
         userTransfers.forEach(t=>{
@@ -120,10 +114,10 @@ const loadUserTransfers=async()=>{
     }catch(err){ console.error(err); }
 };
 
-// --- Inbox ---
+// --- Inbox (guest: shows all notifications) ---
 const renderInbox=async()=>{
     try{
-        const response=await database.listDocuments(DATABASE_ID,NOTIFICATION_COLLECTION,[Appwrite.Query.equal('userId',currentUser?.$id||'guest')]);
+        const response=await database.listDocuments(DATABASE_ID,NOTIFICATION_COLLECTION);
         userNotifications=response.documents||[];
         let html='<h2>Inbox</h2>';
         if(userNotifications.length===0){ html+='<p>No messages</p>'; }
@@ -137,79 +131,17 @@ const renderInbox=async()=>{
 const renderProfile=()=>{ 
     document.getElementById('content-area').innerHTML=`
     <h2>Profile</h2>
-    <p>Username: ${currentUser?.name||'N/A'}</p>
-    <p>User ID: ${currentUser?.$id||'N/A'}</p>
-    <button onclick="updateUsername()">Update Username</button>
+    <p>Username: Guest</p>
+    <p>User ID: guest</p>
     `;
 };
 
-const updateUsername=async()=>{
-    const newName=prompt('Enter new username');
-    if(!newName) return;
-    try{
-        await account.updateName(newName);
-        showMessage('Username updated!');
-        currentUser.name=newName;
-        renderProfile();
-    }catch(err){ console.error(err); showMessage('Error updating username','error'); }
+// --- Admin Panel (hidden) ---
+const renderAdminPanel=()=>{
+    document.getElementById('content-area').innerHTML='<h2>Admin Panel</h2><p>Admin access only</p>';
 };
 
-// --- Admin Panel ---
-const renderAdminPanel=async()=>{
-    if(!isAdmin) return showScreen('home');
-    try{
-        const response=await database.listDocuments(DATABASE_ID,TRANSFER_COLLECTION,[Appwrite.Query.equal('status','Pending')]);
-        adminTransfers=response.documents||[];
-        let html='<h2>Admin Panel - Pending Transfers</h2>';
-        if(adminTransfers.length===0){ html+='<p>No pending transfers</p>'; }
-        else{ adminTransfers.forEach(t=>{
-            html+=`<div class="card">
-            <strong>${t.senderName} ➜ ${t.receiverName}</strong>
-            <p>${t.amountTHB} THB / ${t.amountMMK} MMK</p>
-            <p>Status: ${t.status}</p>
-            <input type="text" id="reply-${t.$id}" placeholder="Reply message">
-            <input type="file" id="reply-image-${t.$id}">
-            <button onclick="completeTransfer('${t.$id}')">Complete & Reply</button>
-            </div>`; }); }
-        document.getElementById('content-area').innerHTML=html;
-    }catch(err){ console.error(err); showMessage('Error loading admin panel','error'); }
+// --- Init ---
+window.onload=()=>{
+    showScreen('home');
 };
-
-const completeTransfer=async(id)=>{
-    try{
-        const replyMsg=document.getElementById(`reply-${id}`).value || 'Transfer Completed';
-        const replyImage=document.getElementById(`reply-image-${id}`).files[0];
-        let imageURL=null;
-        if(replyImage){
-            const fileID=`reply_${Date.now()}_${replyImage.name}`;
-            const uploadedFile=await storage.createFile(STORAGE_BUCKET,fileID,replyImage);
-            imageURL=`https://sgp.cloud.appwrite.io/v1/storage/buckets/${STORAGE_BUCKET}/files/${uploadedFile.$id}/view?project=692ab4ee0030433b4b61`;
-        }
-
-        await database.updateDocument(DATABASE_ID,TRANSFER_COLLECTION,id,{status:'Completed'});
-        await database.createDocument(DATABASE_ID,NOTIFICATION_COLLECTION,'unique()',{
-            userId:adminTransfers.find(t=>t.$id===id).senderId,
-            title:'Transfer Update',
-            message:replyMsg,
-            imageURL:imageURL,
-            timestamp:new Date().toISOString()
-        });
-
-        showMessage('Transfer completed & user notified!');
-        renderAdminPanel();
-    }catch(err){ console.error(err); showMessage('Error completing transfer','error'); }
-};
-
-// --- Initialize ---
-const initApp=async()=>{
-    try{
-        currentUser=await account.get();
-        isAdmin=currentUser.email===ADMIN_EMAIL;
-        showScreen('home');
-    }catch(err){
-        currentUser=null;
-        showScreen('home');
-    }
-};
-
-window.onload=initApp;
