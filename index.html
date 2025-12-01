@@ -1057,29 +1057,30 @@
                                     <input type="hidden" id="phoneBillType" ${currentTransferTab === 'phone-bill' ? 'required' : ''}>
                                 </div>
 
-                                ${currentTransferTab !== 'phone-bill' ? `
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label for="senderName" class="block text-sm font-medium">ငွေလွဲမည့်သူအမည်</label>
-                                        <input type="text" id="senderName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Aung Aung">
+                                <!-- Common Fields for Account and Home Tabs -->
+                                <div id="common-fields" class="${currentTransferTab === 'phone-bill' ? 'hidden' : ''}">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="senderName" class="block text-sm font-medium">ငွေလွဲမည့်သူအမည်</label>
+                                            <input type="text" id="senderName" ${currentTransferTab !== 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="Aung Aung">
+                                        </div>
+                                        <div>
+                                            <label for="receiverName" class="block text-sm font-medium">ငွေလက်ခံမည့်သူအမည်</label>
+                                            <input type="text" id="receiverName" ${currentTransferTab !== 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="Ma Ma">
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label for="receiverName" class="block text-sm font-medium">ငွေလက်ခံမည့်သူအမည်</label>
-                                        <input type="text" id="receiverName" required class="mt-1 w-full p-2 border rounded-lg" placeholder="Ma Ma">
-                                    </div>
-                                </div>
 
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label for="senderPhoneTH" class="block text-sm font-medium">ဖုန်းနံပါတ် (ထိုင်း)</label>
-                                        <input type="tel" id="senderPhoneTH" required class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
-                                    </div>
-                                    <div>
-                                        <label for="receiverPhoneMM" class="block text-sm font-medium">ဖုန်းနံပါတ် (မြန်မာ)</label>
-                                        <input type="tel" id="receiverPhoneMM" required class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="senderPhoneTH" class="block text-sm font-medium">ဖုန်းနံပါတ် (ထိုင်း)</label>
+                                            <input type="tel" id="senderPhoneTH" ${currentTransferTab !== 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label for="receiverPhoneMM" class="block text-sm font-medium">ဖုန်းနံပါတ် (မြန်မာ)</label>
+                                            <input type="tel" id="receiverPhoneMM" ${currentTransferTab !== 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                        </div>
                                     </div>
                                 </div>
-                                ` : ''}
                                 
                                 <!-- Phone Number for Bill (ONLY for Phone Bill Tab) -->
                                 <div id="phone-bill-number-field" class="${currentTransferTab === 'phone-bill' ? '' : 'hidden'}">
@@ -1250,8 +1251,10 @@
             const addressInput = document.getElementById('deliveryAddress');
             const amountDirection = document.getElementById('amountDirection');
             const receiverPhoneMM = document.getElementById('receiverPhoneMM');
-            const senderNameField = document.getElementById('senderName')?.parentElement?.parentElement;
-            const senderPhoneTHField = document.getElementById('senderPhoneTH')?.parentElement?.parentElement;
+            const senderNameField = document.getElementById('senderName');
+            const senderPhoneTHField = document.getElementById('senderPhoneTH');
+            const receiverNameField = document.getElementById('receiverName');
+            const commonFields = document.getElementById('common-fields');
 
             // Reset all fields first
             accountTypeField.classList.add('hidden');
@@ -1265,8 +1268,7 @@
             addressField.classList.add('hidden');
             addressInput.removeAttribute('required');
             
-            if (senderNameField) senderNameField.classList.remove('hidden');
-            if (senderPhoneTHField) senderPhoneTHField.classList.remove('hidden');
+            if (commonFields) commonFields.classList.remove('hidden');
 
             if (tab === 'account') {
                 accountTypeField.classList.remove('hidden');
@@ -1274,18 +1276,35 @@
                 bankQrField.classList.remove('hidden');
                 bankQrInput.setAttribute('required', 'required');
                 amountDirection.innerHTML = getAmountDirectionOptions();
+                
+                // Account tab requires all common fields
+                if (senderNameField) senderNameField.setAttribute('required', 'required');
+                if (senderPhoneTHField) senderPhoneTHField.setAttribute('required', 'required');
+                if (receiverNameField) receiverNameField.setAttribute('required', 'required');
+                if (receiverPhoneMM) receiverPhoneMM.setAttribute('required', 'required');
             } else if (tab === 'home') {
                 addressField.classList.remove('hidden');
                 addressInput.setAttribute('required', 'required');
                 amountDirection.innerHTML = getAmountDirectionOptions();
+                
+                // Home tab requires all common fields
+                if (senderNameField) senderNameField.setAttribute('required', 'required');
+                if (senderPhoneTHField) senderPhoneTHField.setAttribute('required', 'required');
+                if (receiverNameField) receiverNameField.setAttribute('required', 'required');
+                if (receiverPhoneMM) receiverPhoneMM.setAttribute('required', 'required');
             } else if (tab === 'phone-bill') {
                 phoneBillField.classList.remove('hidden');
                 phoneBillTypeInput.setAttribute('required', 'required');
                 phoneBillNumberField.classList.remove('hidden');
                 phoneBillNumberInput.setAttribute('required', 'required');
-                if (senderNameField) senderNameField.classList.add('hidden');
-                if (senderPhoneTHField) senderPhoneTHField.classList.add('hidden');
+                if (commonFields) commonFields.classList.add('hidden');
                 amountDirection.innerHTML = getAmountDirectionOptions();
+                
+                // Phone bill tab doesn't require common fields
+                if (senderNameField) senderNameField.removeAttribute('required');
+                if (senderPhoneTHField) senderPhoneTHField.removeAttribute('required');
+                if (receiverNameField) receiverNameField.removeAttribute('required');
+                if (receiverPhoneMM) receiverPhoneMM.removeAttribute('required');
             }
             
             document.getElementById('transfer-form').onsubmit = (e) => {
@@ -1307,7 +1326,7 @@
             const phoneBillType = transferType === 'phone-bill' ? document.getElementById('phoneBillType').value : 'N/A';
             const phoneBillNumber = transferType === 'phone-bill' ? document.getElementById('phoneBillNumber').value : 'N/A';
             
-            // For phone bill, don't require sender/receiver info
+            // Get fields based on transfer type
             let senderName = '', senderPhoneTH = '', receiverName = '', receiverPhoneMM = '';
             if (transferType !== 'phone-bill') {
                 senderName = document.getElementById('senderName').value;
@@ -1409,6 +1428,18 @@
                 }
 
                 await setDoc(newTransferRef, transferData);
+
+                // Send notification to admin
+                if (isAdmin) {
+                    const adminNotificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications'));
+                    await setDoc(adminNotificationRef, {
+                        title: `📤 ငွေလွဲမှု တောင်းဆိုချက် ပို့ပြီးပါပြီ။`,
+                        message: `သင်၏ ${amountTHB.toFixed(2)} ဘတ် ➜ ${amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု တောင်းဆိုချက်ကို Admin ထံ ပို့ပြီးပါပြီ။`,
+                        isRead: false,
+                        timestamp: serverTimestamp(),
+                        relatedTransferId: newTransferRef.id
+                    });
+                }
 
                 form.reset();
                 updateCalculatedAmount(); 
