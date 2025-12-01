@@ -44,7 +44,7 @@
         }
         
         .scrollable-content {
-            height: calc(100vh - 120px); 
+            height: calc(100vh - 100px); 
             overflow-y: auto;
             -ms-overflow-style: none;
             scrollbar-width: none;
@@ -74,6 +74,34 @@
         .contact-link:hover {
             transform: translateX(5px);
         }
+        
+        .payment-image {
+            width: 100%;
+            height: 80px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 2px solid #4b5563;
+        }
+        
+        .bank-image-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .bank-image-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .bank-image {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #4b5563;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -98,7 +126,6 @@
         <!-- Header -->
         <header id="app-header" class="p-4 pt-6 text-center">
             <h1 class="text-2xl font-extrabold" id="app-title">ထိုင်း-မြန်မာငွေလွဲ (ရေကျော်)</h1>
-            <p id="user-info" class="text-sm mt-1 text-gray-500">Loading user...</p>
         </header>
 
         <!-- Content Area -->
@@ -119,10 +146,10 @@
         // --- Firebase Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, updateDoc, serverTimestamp, getDocs, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, updateDoc, serverTimestamp, getDocs, deleteDoc, orderBy, limit, where } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
         
         // --- Cloudinary Configuration ---
-        const CLOUDINARY_CLOUD_NAME = 'drizdw5nc';
+        const CLOUDINARY_CLOUD_NAME = 'waiyansoe';
         const CLOUDINARY_UPLOAD_PRESET = 'waiyansoe118234';
         
         // --- Firebase Configuration ---
@@ -145,21 +172,32 @@
 
         // State for rates
         let currentRates = {
-            THB_TO_MMK: 121.95,
-            MMK_TO_THB: 126.58,
-            rateHomeDeliveryTHB: 820,
+            THB_TO_MMK: 121.95, // အကောင့်သို့ငွေလွဲရန် - ထိုင်းမှမြန်မာ
+            MMK_TO_THB: 126.58, // အကောင့်သို့ငွေလွဲရန် - မြန်မာမှထိုင်း
+            rateHomeDeliveryTHB_TO_MMK: 820, // အိမ်သို့ငွေလွဲရန် - ထိုင်းမှမြန်မာ
+            rateHomeDeliveryMMK_TO_THB: 830, // အိမ်သို့ငွေလွဲရန် - မြန်မာမှထိုင်း
             lastUpdated: 'Loading...'
         };
 
         let adminBankInfo = {
             image1URL: 'https://placehold.co/200x100/10B981/ffffff?text=Bank+QR+1',
-            image2URL: 'https://placehold.co/200x100/60A5FA/ffffff?text=Bank+QR+2'
+            image2URL: 'https://placehold.co/200x100/60A5FA/ffffff?text=Bank+QR+2',
+            image3URL: 'https://placehold.co/200x100/8B5CF6/ffffff?text=Bank+QR+3',
+            image4URL: 'https://placehold.co/200x100/F59E0B/ffffff?text=Bank+QR+4'
+        };
+
+        let paymentMethodImages = {
+            wavepay: 'https://placehold.co/150x80/0066FF/ffffff?text=Wave+Pay',
+            kpay: 'https://placehold.co/150x80/00CC88/ffffff?text=K+Pay'
         };
 
         let transferDirection = 'THB_TO_MMK'; 
         let userTransfers = [];
         let adminTransfers = [];
         let userNotifications = [];
+
+        // Auto delete old transfers after 7 days
+        const AUTO_DELETE_DAYS = 7;
 
         // --- Utility Functions ---
         const showMessage = (msg, type = 'success') => {
@@ -233,6 +271,38 @@
             }
         };
 
+        // Auto delete old transfers
+        const autoDeleteOldTransfers = async () => {
+            if (!isAdmin) return;
+            
+            try {
+                const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
+                const sevenDaysAgo = new Date();
+                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - AUTO_DELETE_DAYS);
+                
+                const transfersSnapshot = await getDocs(transfersColRef);
+                let deletedCount = 0;
+                
+                transfersSnapshot.forEach(async (docSnap) => {
+                    const transfer = docSnap.data();
+                    if (transfer.timestamp) {
+                        const transferDate = transfer.timestamp.toDate();
+                        if (transferDate < sevenDaysAgo) {
+                            await deleteDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', docSnap.id));
+                            deletedCount++;
+                            console.log('Auto deleted old transfer:', docSnap.id);
+                        }
+                    }
+                });
+                
+                if (deletedCount > 0) {
+                    console.log(`Auto deleted ${deletedCount} old transfers`);
+                }
+            } catch (error) {
+                console.error('Error auto deleting old transfers:', error);
+            }
+        };
+
         // --- Firebase Initialization and Auth ---
         const initFirebase = async () => {
             try {
@@ -246,8 +316,6 @@
                         userEmail = user.email;
                         isAdmin = user.email === ADMIN_EMAIL;
                         
-                        document.getElementById('user-info').textContent = `${user.displayName || user.email} (ID: ${userId.substring(0, 8)}...)`;
-                        
                         document.getElementById('auth-screen').classList.add('hidden');
                         document.getElementById('app-content-wrapper').classList.remove('hidden');
 
@@ -256,8 +324,15 @@
                             updateStaticText();
                             loadRates();
                             loadAdminBankInfo();
+                            loadPaymentMethodImages();
                             loadTransfers();
                             loadNotifications();
+                            
+                            // Auto delete old transfers for admin
+                            if (isAdmin) {
+                                autoDeleteOldTransfers();
+                            }
+                            
                             showScreen('home'); 
                         }
                     } else {
@@ -389,7 +464,8 @@
                     const data = docSnap.data();
                     currentRates.THB_TO_MMK = data.rateBuyMMK || 121.95;
                     currentRates.MMK_TO_THB = data.rateBuyTHB || 126.58;
-                    currentRates.rateHomeDeliveryTHB = data.rateHomeDeliveryTHB || 820;
+                    currentRates.rateHomeDeliveryTHB_TO_MMK = data.rateHomeDeliveryTHB_TO_MMK || 820;
+                    currentRates.rateHomeDeliveryMMK_TO_THB = data.rateHomeDeliveryMMK_TO_THB || 830;
                     
                     const timestamp = data.lastUpdated;
                     if (timestamp) {
@@ -405,7 +481,8 @@
                     setDoc(docRef, { 
                         rateBuyMMK: currentRates.THB_TO_MMK,
                         rateBuyTHB: currentRates.MMK_TO_THB,
-                        rateHomeDeliveryTHB: currentRates.rateHomeDeliveryTHB,
+                        rateHomeDeliveryTHB_TO_MMK: currentRates.rateHomeDeliveryTHB_TO_MMK,
+                        rateHomeDeliveryMMK_TO_THB: currentRates.rateHomeDeliveryMMK_TO_THB,
                         lastUpdated: serverTimestamp() 
                     });
                 }
@@ -421,11 +498,27 @@
                     const data = docSnap.data();
                     adminBankInfo.image1URL = data.image1URL || adminBankInfo.image1URL;
                     adminBankInfo.image2URL = data.image2URL || adminBankInfo.image2URL;
+                    adminBankInfo.image3URL = data.image3URL || adminBankInfo.image3URL;
+                    adminBankInfo.image4URL = data.image4URL || adminBankInfo.image4URL;
                     if (currentScreen === 'home') renderHome();
                 } else {
                     setDoc(docRef, adminBankInfo, { merge: true });
                 }
             }, (error) => console.error("Error fetching bank info: ", error));
+        };
+
+        const loadPaymentMethodImages = () => {
+            const docRef = doc(db, PUBLIC_DATA_PATH, 'config', 'paymentMethods');
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    paymentMethodImages.wavepay = data.wavepay || paymentMethodImages.wavepay;
+                    paymentMethodImages.kpay = data.kpay || paymentMethodImages.kpay;
+                    if (currentScreen === 'transfer') renderTransfer();
+                } else {
+                    setDoc(docRef, paymentMethodImages, { merge: true });
+                }
+            }, (error) => console.error("Error fetching payment method images: ", error));
         };
 
         // --- Transfers and Notifications ---
@@ -507,7 +600,8 @@
             
             const thbFor100kMMK = (100000 / currentRates.THB_TO_MMK).toFixed(2);
             const thbFor100kMMK_reverse = (100000 / currentRates.MMK_TO_THB).toFixed(2);
-            const thbHomeDelivery = currentRates.rateHomeDeliveryTHB;
+            const thbHomeDelivery_TO_MMK = currentRates.rateHomeDeliveryTHB_TO_MMK;
+            const thbHomeDelivery_MMK_TO_THB = (100000 / currentRates.rateHomeDeliveryMMK_TO_THB).toFixed(2);
 
             const content = document.getElementById('content-area');
             content.innerHTML = `
@@ -518,103 +612,172 @@
                     <!-- Home Delivery Rate Card -->
                     <div class="card p-6 rounded-xl space-y-4 border border-red-500/50">
                         <h2 class="text-lg font-bold text-red-400">အိမ်သို့ ငွေလွဲရန် (Home Delivery Rate)</h2>
-                        <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
-                            <div class="text-center w-1/3">
-                                <p class="text-xs font-medium text-gray-300">ဘတ်</p>
-                                <p class="text-2xl font-bold text-gray-50 mt-1">${thbHomeDelivery} ဘတ်</p>
+                        <div class="space-y-4">
+                            <!-- ထိုင်းမှမြန်မာ -->
+                            <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ဘတ်</p>
+                                    <p class="text-2xl font-bold text-gray-50 mt-1">${thbHomeDelivery_TO_MMK} ဘတ်</p>
+                                </div>
+                                <div class="arrow-right">
+                                    <i class="fa-solid fa-arrow-right-arrow-left text-2xl text-red-400"></i>
+                                </div>
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ကျပ်</p>
+                                    <p class="text-2xl font-bold text-gray-50 mt-1">100,000 ကျပ်</p>
+                                </div>
                             </div>
-                            <div class="arrow-right">
-                                <i class="fa-solid fa-arrow-right text-2xl text-red-400"></i>
+                            <p class="text-sm text-center text-gray-200">
+                                ထိုင်းမှမြန်မာ: ၁ ဘတ် = ${(100000 / thbHomeDelivery_TO_MMK).toFixed(2)} ကျပ်
+                            </p>
+                            
+                            <!-- မြန်မာမှထိုင်း -->
+                            <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl mt-4">
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ကျပ်</p>
+                                    <p class="text-2xl font-bold text-gray-50 mt-1">100,000 ကျပ်</p>
+                                </div>
+                                <div class="arrow-right">
+                                    <i class="fa-solid fa-arrow-right-arrow-left text-2xl text-red-400"></i>
+                                </div>
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ဘတ်</p>
+                                    <p class="text-2xl font-bold text-gray-50 mt-1">${thbHomeDelivery_MMK_TO_THB} ဘတ်</p>
+                                </div>
                             </div>
-                            <div class="text-center w-1/3">
-                                <p class="text-xs font-medium text-gray-300">ကျပ်</p>
-                                <p class="text-2xl font-bold text-gray-50 mt-1">100,000 ကျပ်</p>
-                            </div>
+                            <p class="text-sm text-center text-gray-200">
+                                မြန်မာမှထိုင်း: ၁သိန်းလျှင်ရမည့်ဘတ်: ${thbHomeDelivery_MMK_TO_THB} ဘတ်
+                            </p>
                         </div>
-                        <p class="text-sm text-center text-gray-200">
-                            ၁ ဘတ် = ${(100000 / thbHomeDelivery).toFixed(2)} ကျပ်
-                        </p>
                     </div>
 
                     <!-- Account Transfer Rate Card -->
                     <div class="card p-6 rounded-xl space-y-4">
                         <h2 class="text-lg font-bold text-emerald-400">အကောင့်သို့ ငွေလွဲရန်</h2>
-                        <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
-                            <div class="text-center w-1/3">
-                                <p class="text-xs font-medium text-gray-300">ထိုင်းမှ</p>
-                                <p class="text-xl font-bold text-gray-50 mt-1">${thbFor100kMMK} ဘတ်</p>
-                            </div>
+                        <div class="space-y-4">
+                            <!-- ထိုင်းမှမြန်မာ -->
+                            <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ဘတ်</p>
+                                    <p class="text-xl font-bold text-gray-50 mt-1">${thbFor100kMMK} ဘတ်</p>
+                                </div>
 
-                            <div class="arrow-right">
-                                <i class="fa-solid fa-arrow-right text-2xl text-emerald-400"></i>
-                            </div>
+                                <div class="arrow-right">
+                                    <i class="fa-solid fa-arrow-right text-2xl text-emerald-400"></i>
+                                </div>
 
-                            <div class="text-center w-1/3">
-                                <p class="text-xs font-medium text-gray-300">ကျပ်</p>
-                                <p class="text-xl font-bold text-gray-50 mt-1">100,000 ကျပ်</p>
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ကျပ်</p>
+                                    <p class="text-xl font-bold text-gray-50 mt-1">100,000 ကျပ်</p>
+                                </div>
                             </div>
-                        </div>
-                        <div class="text-center pt-2">
-                            <p class="text-sm font-bold text-gray-200">
+                            <p class="text-sm text-center font-bold text-gray-200">
                                 အကောင့်ထဲထည့်ဖို့ ၁သိန်းရရန်: ${thbFor100kMMK} ဘတ်
+                            </p>
+                            
+                            <!-- မြန်မာမှထိုင်း -->
+                            <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl mt-4">
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ကျပ်</p>
+                                    <p class="text-xl font-bold text-gray-50 mt-1">100,000 ကျပ်</p>
+                                </div>
+
+                                <div class="arrow-right">
+                                    <i class="fa-solid fa-arrow-right text-2xl text-emerald-400"></i>
+                                </div>
+
+                                <div class="text-center w-1/3">
+                                    <p class="text-xs font-medium text-gray-300">ဘတ်</p>
+                                    <p class="text-xl font-bold text-gray-50 mt-1">${thbFor100kMMK_reverse} ဘတ်</p>
+                                </div>
+                            </div>
+                            <p class="text-sm text-center font-bold text-gray-200">
+                                အကောင့်ထဲထည့်ဖို့ ၁သိန်းရရန်: ${thbFor100kMMK_reverse} ဘတ်
                             </p>
                         </div>
                     </div>
 
-                    <!-- Admin Bank Info -->
-                    ${renderAdminBankInfo()}
+                    <!-- MyanmarPay Bank Info -->
+                    ${renderMyanmarPayBankInfo()}
                     
                     ${isAdmin ? renderAdminRatePanel() : ''}
                 </div>
             `;
         };
 
-        const renderAdminBankInfo = () => {
+        const renderMyanmarPayBankInfo = () => {
             return `
                 <div class="card p-5 rounded-xl border border-blue-400/50">
-                    <h2 class="text-xl font-bold text-blue-400 mb-3">Admin ၏ ငွေလွဲမည့် ဘဏ်အချက်အလက်</h2>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <img src="${adminBankInfo.image1URL}" onerror="this.src='https://placehold.co/200x100/374151/ffffff?text=Bank+QR+1'" class="w-full rounded-lg object-cover border border-gray-600" alt="ဘဏ်ပုံ ၁">
-                            <button onclick="downloadImage('${adminBankInfo.image1URL}')" class="w-full flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
+                    <h2 class="text-xl font-bold text-blue-400 mb-3">MyanmarPay ဘဏ်ပြင်ဆင်ချက်</h2>
+                    <div class="bank-image-container">
+                        <div class="bank-image-item">
+                            <img src="${adminBankInfo.image1URL}" onerror="this.src='https://placehold.co/200x100/10B981/ffffff?text=Bank+QR+1'" class="bank-image" alt="ဘဏ်ပုံ ၁">
+                            <button onclick="downloadImage('${adminBankInfo.image1URL}')" class="w-full mt-2 flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
                                 <i class="fa-solid fa-download mr-2"></i> ပုံကို Save
                             </button>
                         </div>
-                        <div class="space-y-2">
-                            <img src="${adminBankInfo.image2URL}" onerror="this.src='https://placehold.co/200x100/374151/ffffff?text=Bank+QR+2'" class="w-full rounded-lg object-cover border border-gray-600" alt="ဘဏ်ပုံ ၂">
-                            <button onclick="downloadImage('${adminBankInfo.image2URL}')" class="w-full flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
+                        <div class="bank-image-item">
+                            <img src="${adminBankInfo.image2URL}" onerror="this.src='https://placehold.co/200x100/60A5FA/ffffff?text=Bank+QR+2'" class="bank-image" alt="ဘဏ်ပုံ ၂">
+                            <button onclick="downloadImage('${adminBankInfo.image2URL}')" class="w-full mt-2 flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
+                                <i class="fa-solid fa-download mr-2"></i> ပုံကို Save
+                            </button>
+                        </div>
+                        <div class="bank-image-item">
+                            <img src="${adminBankInfo.image3URL}" onerror="this.src='https://placehold.co/200x100/8B5CF6/ffffff?text=Bank+QR+3'" class="bank-image" alt="ဘဏ်ပုံ ၃">
+                            <button onclick="downloadImage('${adminBankInfo.image3URL}')" class="w-full mt-2 flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
+                                <i class="fa-solid fa-download mr-2"></i> ပုံကို Save
+                            </button>
+                        </div>
+                        <div class="bank-image-item">
+                            <img src="${adminBankInfo.image4URL}" onerror="this.src='https://placehold.co/200x100/F59E0B/ffffff?text=Bank+QR+4'" class="bank-image" alt="ဘဏ်ပုံ ၄">
+                            <button onclick="downloadImage('${adminBankInfo.image4URL}')" class="w-full mt-2 flex items-center justify-center p-2 text-xs bg-gray-600 text-blue-400 rounded-lg hover:bg-gray-500">
                                 <i class="fa-solid fa-download mr-2"></i> ပုံကို Save
                             </button>
                         </div>
                     </div>
-                    ${isAdmin ? renderAdminBankUpdateForm() : ''}
+                    ${isAdmin ? renderMyanmarPayBankUpdateForm() : ''}
                 </div>
             `;
         };
 
-        const renderAdminBankUpdateForm = () => {
+        const renderMyanmarPayBankUpdateForm = () => {
             return `
                 <form id="bank-image-update-form" onsubmit="event.preventDefault(); updateBankImages()" class="mt-4 pt-4 border-t border-gray-600 space-y-3">
-                    <h3 class="text-lg font-semibold text-red-400">Admin: ဘဏ်ပုံများ ပြင်ဆင်ရန်</h3>
-                    <div>
-                        <label for="bankImage1File" class="block text-sm font-medium">ဘဏ်ပုံ (၁) အပ်လုဒ်</label>
-                        <input type="file" id="bankImage1File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg">
+                    <h3 class="text-lg font-semibold text-red-400">Admin: MyanmarPay ဘဏ်ပုံများ ပြင်ဆင်ရန်</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="bankImage1File" class="block text-xs font-medium">ဘဏ်ပုံ (၁)</label>
+                            <input type="file" id="bankImage1File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label for="bankImage2File" class="block text-xs font-medium">ဘဏ်ပုံ (၂)</label>
+                            <input type="file" id="bankImage2File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label for="bankImage3File" class="block text-xs font-medium">ဘဏ်ပုံ (၃)</label>
+                            <input type="file" id="bankImage3File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg text-xs">
+                        </div>
+                        <div>
+                            <label for="bankImage4File" class="block text-xs font-medium">ဘဏ်ပုံ (၄)</label>
+                            <input type="file" id="bankImage4File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg text-xs">
+                        </div>
                     </div>
-                    <div>
-                        <label for="bankImage2File" class="block text-sm font-medium">ဘဏ်ပုံ (၂) အပ်လုဒ်</label>
-                        <input type="file" id="bankImage2File" accept="image/*" class="mt-1 w-full p-1 border rounded-lg">
-                    </div>
-                    <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
+                    <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold text-sm">ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
                 </form>
             `;
         };
 
         const updateBankImages = async () => {
             if (!isAdmin) return showMessage('Admin လုပ်ဆောင်ချက်သာ ဖြစ်သည်', 'error');
+            
             const file1 = document.getElementById('bankImage1File').files[0];
             const file2 = document.getElementById('bankImage2File').files[0];
+            const file3 = document.getElementById('bankImage3File').files[0];
+            const file4 = document.getElementById('bankImage4File').files[0];
             
-            if (!file1 && !file2) return showMessage('ပုံအသစ် အနည်းဆုံးတစ်ပုံကို ရွေးချယ်ပါ', 'error');
+            if (!file1 && !file2 && !file3 && !file4) {
+                return showMessage('ပုံအသစ် အနည်းဆုံးတစ်ပုံကို ရွေးချယ်ပါ', 'error');
+            }
 
             document.getElementById('loading-overlay').classList.remove('hidden');
             let updatedURLs = {};
@@ -626,10 +789,16 @@
                 if (file2) {
                     updatedURLs.image2URL = await uploadToCloudinary(file2);
                 }
+                if (file3) {
+                    updatedURLs.image3URL = await uploadToCloudinary(file3);
+                }
+                if (file4) {
+                    updatedURLs.image4URL = await uploadToCloudinary(file4);
+                }
 
                 const docRef = doc(db, PUBLIC_DATA_PATH, 'config', 'bankInfo');
                 await updateDoc(docRef, updatedURLs);
-                showMessage('ဘဏ်ပုံများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
+                showMessage('MyanmarPay ဘဏ်ပုံများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
 
             } catch (e) {
                 console.error("Error updating bank images: ", e);
@@ -645,24 +814,97 @@
                     <h2 class="text-xl font-bold text-red-400 mb-3">Admin: ငွေလဲနှုန်းများ ပြင်ဆင်ရန်</h2>
                     <form id="rate-update-form" onsubmit="event.preventDefault(); updateRates()" class="space-y-3">
                         <div>
-                            <label for="rateBuyMMKInput" class="block text-sm font-medium">ထိုင်းမှမြန်မာ (အကောင့်ထဲထည့်ဖို့ ၁သိန်းရရန် ဘတ်)</label>
+                            <label for="rateBuyMMKInput" class="block text-sm font-medium">အကောင့်သို့ - ထိုင်းမှမြန်မာ (၁သိန်းရရန် ဘတ်)</label>
                             <input type="number" id="rateBuyMMKInput" step="0.01" value="${(100000 / currentRates.THB_TO_MMK).toFixed(2)}" required class="mt-1 w-full p-2 border rounded-lg">
                             <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${currentRates.THB_TO_MMK.toFixed(2)} ကျပ်</p>
                         </div>
                         <div>
-                            <label for="rateBuyTHBInput" class="block text-sm font-medium">မြန်မာမှထိုင်း (၁သိန်းလျှင်ရမည့်ဘတ်)</label>
+                            <label for="rateBuyTHBInput" class="block text-sm font-medium">အကောင့်သို့ - မြန်မာမှထိုင်း (၁သိန်းရရန် ဘတ်)</label>
                             <input type="number" id="rateBuyTHBInput" step="0.01" value="${(100000 / currentRates.MMK_TO_THB).toFixed(2)}" required class="mt-1 w-full p-2 border rounded-lg">
                             <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${currentRates.MMK_TO_THB.toFixed(2)} ကျပ်</p>
                         </div>
                         <div>
-                            <label for="rateHomeDeliveryTHBInput" class="block text-sm font-medium">အိမ်မှထိုင်းသို့ (၁သိန်းလျှင်ရမည့်ဘတ်)</label>
-                            <input type="number" id="rateHomeDeliveryTHBInput" step="0.01" value="${(100000 / currentRates.rateHomeDeliveryTHB).toFixed(2)}" required class="mt-1 w-full p-2 border rounded-lg">
-                            <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${(100000 / currentRates.rateHomeDeliveryTHB).toFixed(2)} ကျပ်</p>
+                            <label for="rateHomeDeliveryTHBInput" class="block text-sm font-medium">အိမ်သို့ - ထိုင်းမှမြန်မာ (၁သိန်းရရန် ဘတ်)</label>
+                            <input type="number" id="rateHomeDeliveryTHBInput" step="0.01" value="${currentRates.rateHomeDeliveryTHB_TO_MMK}" required class="mt-1 w-full p-2 border rounded-lg">
+                            <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${(100000 / currentRates.rateHomeDeliveryTHB_TO_MMK).toFixed(2)} ကျပ်</p>
+                        </div>
+                        <div>
+                            <label for="rateHomeDeliveryMMKInput" class="block text-sm font-medium">အိမ်သို့ - မြန်မာမှထိုင်း (၁သိန်းရရန် ဘတ်)</label>
+                            <input type="number" id="rateHomeDeliveryMMKInput" step="0.01" value="${(100000 / currentRates.rateHomeDeliveryMMK_TO_THB).toFixed(2)}" required class="mt-1 w-full p-2 border rounded-lg">
+                            <p class="text-xs text-gray-400 mt-1">လက်ရှိ: ၁ ဘတ် = ${currentRates.rateHomeDeliveryMMK_TO_THB.toFixed(2)} ကျပ်</p>
                         </div>
                         <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold">နှုန်းထားများ အပ်ဒိတ်လုပ်ရန်</button>
                     </form>
+                    
+                    <!-- Payment Method Image Upload -->
+                    <form id="payment-method-update-form" onsubmit="event.preventDefault(); updatePaymentMethodImages()" class="mt-6 pt-4 border-t border-gray-600 space-y-3">
+                        <h3 class="text-lg font-semibold text-blue-400">Payment Method ပုံများ အပ်ဒိတ်လုပ်ရန်</h3>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="text-center">
+                                <p class="text-sm font-medium mb-2">Wave Pay</p>
+                                <img src="${paymentMethodImages.wavepay}" class="payment-image mb-2" alt="Wave Pay">
+                            </div>
+                            <div class="text-center">
+                                <p class="text-sm font-medium mb-2">K Pay</p>
+                                <img src="${paymentMethodImages.kpay}" class="payment-image mb-2" alt="K Pay">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label for="wavepayFile" class="block text-xs font-medium">Wave Pay ပုံ</label>
+                                <input type="file" id="wavepayFile" accept="image/*" class="mt-1 w-full p-1 border rounded-lg text-xs">
+                            </div>
+                            <div>
+                                <label for="kpayFile" class="block text-xs font-medium">K Pay ပုံ</label>
+                                <input type="file" id="kpayFile" accept="image/*" class="mt-1 w-full p-1 border rounded-lg text-xs">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold text-sm">Payment Method ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
+                    </form>
+                    
+                    <!-- Auto Delete Settings -->
+                    <div class="mt-6 pt-4 border-t border-gray-600">
+                        <h3 class="text-lg font-semibold text-yellow-400 mb-2">အလိုအလျောက် ဖျက်သိမ်းခြင်း</h3>
+                        <p class="text-sm text-gray-300">ငွေလွဲစာရင်းများကို ၇ ရက်ကျော်သွားပါက အလိုအလျောက် ဖျက်သိမ်းပါမည်။</p>
+                        <button onclick="autoDeleteOldTransfers()" class="w-full py-2 rounded-lg font-semibold bg-yellow-600 text-white mt-3 hover:bg-yellow-500">
+                            <i class="fa-solid fa-trash-can mr-2"></i> လက်ရှိ ၇ ရက်ကျော်သော စာရင်းများ ဖျက်ရန်
+                        </button>
+                    </div>
                 </div>
             `;
+        };
+
+        const updatePaymentMethodImages = async () => {
+            if (!isAdmin) return showMessage('Admin လုပ်ဆောင်ချက်သာ ဖြစ်သည်', 'error');
+            
+            const wavepayFile = document.getElementById('wavepayFile').files[0];
+            const kpayFile = document.getElementById('kpayFile').files[0];
+            
+            if (!wavepayFile && !kpayFile) {
+                return showMessage('ပုံအသစ် အနည်းဆုံးတစ်ပုံကို ရွေးချယ်ပါ', 'error');
+            }
+
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            let updatedImages = {};
+
+            try {
+                if (wavepayFile) {
+                    updatedImages.wavepay = await uploadToCloudinary(wavepayFile);
+                }
+                if (kpayFile) {
+                    updatedImages.kpay = await uploadToCloudinary(kpayFile);
+                }
+
+                const docRef = doc(db, PUBLIC_DATA_PATH, 'config', 'paymentMethods');
+                await updateDoc(docRef, updatedImages);
+                showMessage('Payment Method ပုံများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
+
+            } catch (e) {
+                console.error("Error updating payment method images: ", e);
+                showMessage('Payment Method ပုံ အပ်ဒိတ်လုပ်ရာတွင် အမှားရှိပါသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
         };
 
         const updateRates = async () => {
@@ -670,15 +912,17 @@
 
             const thbFor100kMMK = parseFloat(document.getElementById('rateBuyMMKInput').value);
             const thbFor100kMMK_reverse = parseFloat(document.getElementById('rateBuyTHBInput').value);
-            const thbFor100kHomeDelivery = parseFloat(document.getElementById('rateHomeDeliveryTHBInput').value);
+            const thbHomeDelivery_TO_MMK = parseFloat(document.getElementById('rateHomeDeliveryTHBInput').value);
+            const thbHomeDelivery_MMK_TO_THB = parseFloat(document.getElementById('rateHomeDeliveryMMKInput').value);
             
-            if (isNaN(thbFor100kMMK) || isNaN(thbFor100kMMK_reverse) || isNaN(thbFor100kHomeDelivery)) {
+            if (isNaN(thbFor100kMMK) || isNaN(thbFor100kMMK_reverse) || isNaN(thbHomeDelivery_TO_MMK) || isNaN(thbHomeDelivery_MMK_TO_THB)) {
                 return showMessage('မှန်ကန်သော နှုန်းထားများကို ဖြည့်သွင်းပါ', 'error');
             }
 
             const rateBuyMMK = 100000 / thbFor100kMMK;
             const rateBuyTHB = 100000 / thbFor100kMMK_reverse;
-            const rateHomeDeliveryTHB = 100000 / thbFor100kHomeDelivery;
+            const rateHomeDeliveryTHB_TO_MMK = thbHomeDelivery_TO_MMK;
+            const rateHomeDeliveryMMK_TO_THB = 100000 / thbHomeDelivery_MMK_TO_THB;
 
             document.getElementById('loading-overlay').classList.remove('hidden');
 
@@ -687,7 +931,8 @@
                 await updateDoc(docRef, { 
                     rateBuyMMK, 
                     rateBuyTHB,
-                    rateHomeDeliveryTHB,
+                    rateHomeDeliveryTHB_TO_MMK,
+                    rateHomeDeliveryMMK_TO_THB,
                     lastUpdated: serverTimestamp() 
                 });
                 showMessage('နှုန်းထားများ အောင်မြင်စွာ အပ်ဒိတ်လုပ်ပြီးပါပြီ။');
@@ -706,8 +951,8 @@
             content.innerHTML = `
                 <div class="space-y-6">
                     <div class="card p-5 rounded-xl border border-blue-400/50">
-                        <h2 class="text-xl font-bold text-blue-400 mb-3">ငွေလွဲမှု အမျိုးအစား</h2>
-                        <p class="text-sm text-gray-300 mb-2">Admin မှ ပေးထားသော QR/ဖုန်းနံပါတ်သို့ ငွေပို့ပြီးမှ ဖောင်ဖြည့်ပါ။</p>
+                        <h2 class="text-xl font-bold text-blue-400 mb-3">MyanmarPay ငွေလွဲမှု အမျိုးအစား</h2>
+                        <p class="text-sm text-gray-300 mb-2">MyanmarPay မှ ပေးထားသော QR/ဖုန်းနံပါတ်သို့ ငွေပို့ပြီးမှ ဖောင်ဖြည့်ပါ။</p>
                     </div>
 
                     <!-- Tabs for Transfer Type -->
@@ -728,15 +973,25 @@
                         <form id="transfer-form" onsubmit="event.preventDefault(); submitTransfer('${currentTransferTab}')">
                             <div class="space-y-4">
                                 
-                                <!-- Transfer Account Selection (ONLY for Account Tab) -->
-                                <div id="account-type-field" class="${currentTransferTab === 'account' ? '' : 'hidden'}">
-                                    <label for="transferAccountType" class="block text-sm font-medium">ငွေပို့ထားသည့် အကောင့် (ရွေးချယ်ပါ)</label>
-                                    <select id="transferAccountType" ${currentTransferTab === 'account' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg focus:ring-emerald-500 focus:border-emerald-500">
-                                        <option value="">-- ရွေးချယ်ပါ --</option>
-                                        <option value="KayPay">Kay Pay</option>
-                                        <option value="WavePay">Wave Pay</option>
-                                        <option value="Other">အခြား (Other)</option>
-                                    </select>
+                                <!-- Payment Method Selection with Images (ONLY for Account Tab) -->
+                                <div id="payment-method-field" class="${currentTransferTab === 'account' ? '' : 'hidden'}">
+                                    <label class="block text-sm font-medium mb-2">ငွေပို့ထားသည့် အကောင့် (ရွေးချယ်ပါ)</label>
+                                    <div class="grid grid-cols-2 gap-4 mb-4">
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="paymentMethod" value="wavepay" class="hidden peer" required>
+                                            <div class="card p-4 text-center peer-checked:border-emerald-500 peer-checked:border-2">
+                                                <img src="${paymentMethodImages.wavepay}" class="payment-image mb-2 mx-auto" alt="Wave Pay">
+                                                <p class="text-sm font-medium">Wave Pay</p>
+                                            </div>
+                                        </label>
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="paymentMethod" value="kpay" class="hidden peer" required>
+                                            <div class="card p-4 text-center peer-checked:border-emerald-500 peer-checked:border-2">
+                                                <img src="${paymentMethodImages.kpay}" class="payment-image mb-2 mx-auto" alt="K Pay">
+                                                <p class="text-sm font-medium">K Pay</p>
+                                            </div>
+                                        </label>
+                                    </div>
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-4">
@@ -823,11 +1078,11 @@
             let result, fromCurrency, toCurrency;
             
             if (direction === 'THB_MMK') {
-                result = input * currentRates.THB_TO_MMK;
+                result = input * (currentTransferTab === 'home' ? (100000 / currentRates.rateHomeDeliveryTHB_TO_MMK) : currentRates.THB_TO_MMK);
                 fromCurrency = 'ဘတ်';
                 toCurrency = 'ကျပ်';
             } else {
-                result = input / currentRates.MMK_TO_THB;
+                result = input / (currentTransferTab === 'home' ? currentRates.rateHomeDeliveryMMK_TO_THB : currentRates.MMK_TO_THB);
                 fromCurrency = 'ကျပ်';
                 toCurrency = 'ဘတ်';
             }
@@ -844,8 +1099,7 @@
             
             document.getElementById('transfer-form-title').textContent = `${tab === 'account' ? 'အကောင့်သို့ ငွေလွဲရန်' : 'အိမ်အရောက် ပို့ရန်'} ဖောင်`;
             
-            const accountTypeField = document.getElementById('account-type-field');
-            const accountTypeInput = document.getElementById('transferAccountType');
+            const paymentMethodField = document.getElementById('payment-method-field');
             const bankQrField = document.getElementById('bank-qr-field');
             const bankQrInput = document.getElementById('bankQrFile');
             const addressField = document.getElementById('home-address-field');
@@ -853,8 +1107,7 @@
             const amountDirection = document.getElementById('amountDirection');
 
             if (tab === 'account') {
-                accountTypeField.classList.remove('hidden');
-                accountTypeInput.setAttribute('required', 'required');
+                paymentMethodField.classList.remove('hidden');
                 bankQrField.classList.remove('hidden');
                 bankQrInput.setAttribute('required', 'required');
                 addressField.classList.add('hidden');
@@ -862,8 +1115,7 @@
                 // Only show THB to MMK for account transfer
                 amountDirection.innerHTML = '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option>';
             } else {
-                accountTypeField.classList.add('hidden');
-                accountTypeInput.removeAttribute('required');
+                paymentMethodField.classList.add('hidden');
                 bankQrField.classList.add('hidden');
                 bankQrInput.removeAttribute('required');
                 addressField.classList.remove('hidden');
@@ -885,7 +1137,7 @@
             if (!userId) return showMessage('အသုံးပြုသူအချက်အလက် မရှိပါ', 'error');
 
             const form = document.getElementById('transfer-form');
-            const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
+            const paymentMethod = transferType === 'account' ? document.querySelector('input[name="paymentMethod"]:checked')?.value : 'N/A';
             const senderName = document.getElementById('senderName').value;
             const senderPhoneTH = document.getElementById('senderPhoneTH').value;
             const receiverName = document.getElementById('receiverName').value;
@@ -906,6 +1158,10 @@
                 return showMessage('ပမာဏ သို့မဟုတ် စလစ်ပုံဖိုင်ကို မှန်ကန်စွာ ဖြည့်သွင်းပါ', 'error');
             }
 
+            if (transferType === 'account' && !paymentMethod) {
+                return showMessage('ငွေပို့ထားသည့် အကောင့်ကို ရွေးချယ်ပါ', 'error');
+            }
+
             if (transferType === 'account' && !bankQrFile) {
                 return showMessage('ဘဏ် QR ပုံကို မဖြစ်မနေ ထည့်သွင်းပေးပါ', 'error');
             }
@@ -913,10 +1169,10 @@
             let amountTHB, amountMMK;
             if (amountDirection === 'THB_MMK') {
                 amountTHB = amountInput;
-                amountMMK = amountInput * currentRates.THB_TO_MMK;
+                amountMMK = amountInput * (transferType === 'home' ? (100000 / currentRates.rateHomeDeliveryTHB_TO_MMK) : currentRates.THB_TO_MMK);
             } else {
                 amountMMK = amountInput;
-                amountTHB = amountInput / currentRates.MMK_TO_THB;
+                amountTHB = amountInput / (transferType === 'home' ? currentRates.rateHomeDeliveryMMK_TO_THB : currentRates.MMK_TO_THB);
             }
 
             document.getElementById('loading-overlay').classList.remove('hidden');
@@ -940,7 +1196,7 @@
                     senderPhoneTH,
                     receiverName,
                     receiverPhoneMM,
-                    transferAccountType, 
+                    transferAccountType: paymentMethod, 
                     amountTHB: parseFloat(amountTHB.toFixed(2)),
                     amountMMK: parseFloat(amountMMK.toFixed(2)),
                     transferDirection: amountDirection,
@@ -976,7 +1232,7 @@
 
             content.innerHTML = `
                 <div class="space-y-6">
-                    <h2 class="text-2xl font-bold text-red-400">Admin စစ်ဆေးဆဲ စာရင်း (${pendingTransfers.length})</h2>
+                    <h2 class="text-2xl font-bold text-red-400">စီမံခန့်ခွဲမှု စစ်ဆေးဆဲ စာရင်း (${pendingTransfers.length})</h2>
                     <p class="text-sm text-gray-400">စစ်ဆေးရန်ကျန်ရှိသော စာရင်းများ</p>
 
                     <div id="admin-transfers-list" class="space-y-3">
@@ -1097,8 +1353,8 @@
 
                 const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${transfer.senderId}`, 'notifications'));
                 await setDoc(notificationRef, {
-                    title: `Admin မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်`,
-                    message: message || 'Admin မှ သင့်အား ပုံဖြင့် အကြောင်းပြန်ကြားထားပါသည်။',
+                    title: `MyanmarPay မှ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အကြောင်း ပြန်ကြားချက်`,
+                    message: message || 'MyanmarPay မှ သင့်အား ပုံဖြင့် အကြောင်းပြန်ကြားထားပါသည်။',
                     imageURL: replyImageURL,
                     isRead: false,
                     timestamp: serverTimestamp(),
@@ -1153,7 +1409,7 @@
             content.innerHTML = `
                 <div class="space-y-6" id="inbox-content">
                     <h2 class="text-2xl font-bold text-emerald-400">အဝင်စာ</h2>
-                    <p class="text-sm text-gray-400">Admin မှ ပို့သော မက်ဆေ့ခ်ျများ</p>
+                    <p class="text-sm text-gray-400">MyanmarPay မှ ပို့သော မက်ဆေ့ခ်ျများ</p>
                     
                     <div id="notifications-list" class="space-y-3">
                         ${userNotifications.length === 0 ? 
@@ -1209,7 +1465,6 @@
                         <div class="space-y-3">
                             <p><strong>Username:</strong> ${userDisplayName || 'N/A'}</p>
                             <p><strong>Email:</strong> ${userEmail}</p>
-                            <p><strong>User ID:</strong> ${userId || 'N/A'}</p>
                         </div>
                         
                         <form id="update-profile-form" onsubmit="event.preventDefault(); updateProfileName()" class="mt-4 pt-4 border-t border-gray-600">
@@ -1394,10 +1649,6 @@
                 showMessage('ထွက်ခွာရန် အမှားရှိသည်', 'error');
             }
         };
-        window.toggleRateDirection = () => {
-            transferDirection = transferDirection === 'THB_TO_MMK' ? 'MMK_TO_THB' : 'THB_TO_MMK';
-            renderHome();
-        };
         window.updateRates = updateRates;
         window.showScreen = showScreen;
         window.setTransferTab = setTransferTab;
@@ -1411,6 +1662,8 @@
         window.updateProfileName = updateProfileName;
         window.downloadImage = downloadImage;
         window.updateBankImages = updateBankImages;
+        window.updatePaymentMethodImages = updatePaymentMethodImages;
+        window.autoDeleteOldTransfers = autoDeleteOldTransfers;
         window.setLanguage = (lang) => {
             showMessage('ဘာသာစကား ပြောင်းလဲမှု အောင်မြင်ပါသည်');
         };
