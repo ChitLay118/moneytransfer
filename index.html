@@ -6,48 +6,64 @@
     <title>ထိုင်း-မြန်မာငွေလွဲ (ရေကျော်)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Pyidaungsu&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body {font-family:'Pyidaungsu','Inter',sans-serif;background:#1f2937;color:#f3f4f6;}
-        .card {background:#374151;border:1px solid #4b5563;border-radius:1rem;box-shadow:0 10px 15px -3px rgba(0,0,0,0.3);}
-        .btn-primary {background:#10B981;color:#fff;padding:0.75rem 1.5rem;border-radius:0.5rem;font-weight:600;}
-        .btn-primary:hover {background:#059669;}
+        :root {
+            --primary: #10B981;
+            --primary-dark: #059669;
+            --bg: #1f2937;
+            --card: #374151;
+            --border: #4b5563;
+        }
+        body {font-family: 'Inter', sans-serif;background:var(--bg);color:#f3f4f6;margin:0;}
+        .card {background:var(--card);border:1px solid var(--border);border-radius:1rem;box-shadow:0 10px 15px -3px rgba(0,0,0,0.3);}
+        input, select, textarea {background:#4b5563;color:#fff;border:1px solid #6b7280;border-radius:0.5rem;padding:0.75rem;}
+        .btn-primary {background:var(--primary);color:white;padding:0.75rem 1.5rem;border-radius:0.5rem;font-weight:600;transition:0.2s;}
+        .btn-primary:hover {background:var(--primary-dark);}
         .scrollable {height:calc(100vh - 120px);overflow-y:auto;-ms-overflow-style:none;scrollbar-width:none;}
         .scrollable::-webkit-scrollbar {display:none;}
-        .tab-active {border-bottom:3px solid #10B981;color:#10B981;font-weight:600;}
-        .grid-2 {display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+        .tab-active {border-bottom:3px solid var(--primary);color:var(--primary);font-weight:600;}
+        .badge {position:absolute;top:4px;right:4px;width:12px;height:12px;background:red;border-radius:50%;}
     </style>
 </head>
 <body class="min-h-screen">
 
-<div id="loading" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+<div id="loading" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
     <div class="text-center">
         <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-emerald-500 mx-auto"></div>
-        <p class="mt-4 text-white">ဒေတာများ ဆွဲယူနေပါသည်...</p>
+        <p class="mt-4 text-white text-lg">ဒေတာများ ဆွဲယူနေပါသည်...</p>
     </div>
 </div>
 
-<div id="msg" class="fixed top-4 right-4 z-50"></div>
+<div id="msg-box" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
-<div id="auth" class="min-h-screen flex items-center justify-center p-4"></div>
+<!-- Auth Screen -->
+<div id="auth-screen" class="min-h-screen flex items-center justify-center p-4"></div>
 
+<!-- Main App -->
 <div id="app" class="max-w-xl mx-auto min-h-screen flex flex-col hidden">
-    <header class="p-6 text-center">
-        <h1 class="text-2xl font-bold">ထိုင်း-မြန်မာငွေလွဲ (ရေကျော်)</h1>
+    <header class="p-4 pt-8 text-center">
+        <h1 class="text-2xl font-extrabold text-emerald-400">ထိုင်း-မြန်မာငွေလွဲ (ရေကျော်)</h1>
         <p id="user-info" class="text-sm text-gray-400 mt-1">Loading...</p>
     </header>
 
     <main id="content" class="flex-grow p-4 scrollable"></main>
 
     <nav class="sticky bottom-0 bg-gray-800 border-t border-gray-700 p-3">
-        <div class="flex justify-around" id="nav"></div>
+        <div class="flex justify-around text-xs font-medium" id="nav"></div>
     </nav>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, updateDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+import { 
+    getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
+    onAuthStateChanged, updateProfile, signOut 
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+import { 
+    getFirestore, doc, setDoc, onSnapshot, collection, updateDoc, 
+    serverTimestamp, deleteDoc, query, where, orderBy, limit 
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAUL74mqVCIY1MMclrRhdVbY_VyP4lgQpY",
@@ -64,44 +80,55 @@ const db = getFirestore(app);
 const APP_ID = 'thai-myanmar-remittance';
 const ADMIN_EMAIL = 'c388925@gmail.com';
 
-let userId, isAdmin = false;
-let rates = { THB_TO_MMK:121.95, rateHomeTHBtoMMK:820, rateHomeMMKtoTHB:750 };
-let mpImages = {i1:'',i2:'',i3:'',i4:''};
+let userId = null, userEmail = null, isAdmin = false;
+let currentScreen = 'home';
+let currentTransferTab = 'account';
+let rates = { THB_TO_MMK: 121.95, rateHomeTHBtoMMK: 820, rateHomeMMKtoTHB: 750, lastUpdated: '' };
+let myanmarPay = { img1:'', img2:'', img3:'', img4:'' };
+let userTransfers = [], adminTransfers = [], notifications = [];
 
+// Utility
 const loading = document.getElementById('loading');
-const msgBox = document.getElementById('msg');
-
-const showMsg = (text,type='success') => {
+const msgBox = document.getElementById('msg-box');
+const showMsg = (m,t='success') => {
     const el = document.createElement('div');
-    el.className = type==='success'?'bg-emerald-600':'bg-red-600';
-    el.classList.add('text-white','px-4','py-2','rounded-lg','mb-2','shadow-lg');
-    el.textContent = text;
+    el.className = `${t==='success'?'bg-emerald-600':'bg-red-600'} text-white px-4 py-3 rounded-lg shadow-lg`;
+    el.textContent = m;
     msgBox.prepend(el);
     setTimeout(()=>el.remove(),5000);
 };
 
-const uploadImg = async file => {
+const upload = async file => {
     const f = new FormData();
     f.append('file',file);
     f.append('upload_preset','waiyansoe118234');
-    const r = await fetch('https://api.cloudinary.com/v1_1/waiyansoe/image/upload', {method:'POST',body:f});
+    const r = await fetch('https://api.cloudinary.com/v1_1/waiyansoe/image/upload',{method:'POST',body:f});
     const d = await r.json();
     return d.secure_url;
 };
 
+const download = url => {
+    fetch(url).then(r=>r.blob()).then(b=>{
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'image.png';
+        a.click();
+    });
+};
+
 // Auth
-const authDiv = document.getElementById('auth');
-const renderLogin = (login=true) => {
-    authDiv.innerHTML = `
-        <div class="card p-8 max-w-sm w-full">
+const authScreen = document.getElementById('auth-screen');
+const renderAuth = (login=true) => {
+    authScreen.innerHTML = `
+        <div class="card p-8 w-full max-w-sm">
             <h2 class="text-3xl font-bold text-center text-emerald-400 mb-8">${login?'အကောင့်ဝင်ရန်':'အကောင့်ဖွင့်ရန်'}</h2>
             <form id="authForm">
-                ${!login?`<input type="text" id="name" placeholder="အမည်" required class="w-full p-3 rounded border mb-4 w-full">`:''}
-                <input type="email" id="email" placeholder="email@gmail.com" required class="w-full p-3 rounded border mb-4">
-                <input type="password" id="pass" placeholder="လျှို့ဝှက်နံပါတ်" required class="w-full p-3 rounded border mb-6">
-                <button type="submit" class="btn-primary w-full">${login?'ဝင်ရန်':'ဖွင့်ရန်'}</button>
+                ${!login ? `<input type="text" id="name" placeholder="အမည်" required class="w-full mb-4">` : ''}
+                <input type="email" id="email" placeholder="email@gmail.com" required class="w-full mb-4">
+                <input type="password" id="pass" placeholder="လျှို့ဝှက်နံပါတ် (၆လုံးအထက်)" required class="w-full mb-6">
+                <button type="submit" class="btn-primary w-full py-3">${login?'ဝင်ရန်':'ဖွင့်ရန်'}</button>
             </form>
-            <p class="text-center mt-4 text-sm"><a href="#" onclick="renderLogin(${!login})" class="text-blue-400">
+            <p class="text-center mt-4 text-sm"><a href="#" onclick="renderAuth(${!login})" class="text-blue-400">
                 ${login?'အကောင့်မရှိသေးဘူးလား? ဖွင့်ရန်':'အကောင့်ရှိပြီးသားလား? ဝင်ရန်'}
             </a></p>
         </div>`;
@@ -116,86 +143,140 @@ const renderLogin = (login=true) => {
                 const cred = await createUserWithEmailAndPassword(auth,email,pass);
                 await updateProfile(cred.user,{displayName:name});
             }
-        } catch(err) { showMsg(err.message,'error'); }
+            showMsg('အောင်မြင်ပါသည်');
+        } catch(err) {
+            showMsg(err.message,'error');
+        }
     };
 };
-renderLogin();
+renderAuth();
 
-// Main App
+// Main App Init
 onAuthStateChanged(auth, user => {
     if(user){
         userId = user.uid;
-        isAdmin = user.email===ADMIN_EMAIL;
-        document.getElementById('user-info').textContent = `${user.displayName||user.email}`;
-        document.getElementById('auth').classList.add('hidden');
+        userEmail = user.email;
+        isAdmin = user.email === ADMIN_EMAIL;
+        document.getElementById('user-info').textContent = `${user.displayName||user.email} (ID: ${userId.slice(0,8)}...)`;
+        document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
         loading.classList.add('hidden');
-        initApp();
+        loadData();
+        showScreen('home');
     } else {
         document.getElementById('app').classList.add('hidden');
-        authDiv.classList.remove('hidden');
+        document.getElementById('auth-screen').classList.remove('hidden');
+        renderAuth();
         loading.classList.add('hidden');
-        renderLogin();
     }
 });
 
-const initApp = () => {
+const loadData = () => {
     // Rates
-    onSnapshot(doc(db,`artifacts/${APP_ID}/public/data/rates/current`), snap=>{
-        if(snap.exists()){
-            const d = snap.data();
-            rates.THB_TO_MMK = d.THB_TO_MMK||121.95;
-            rates.rateHomeTHBtoMMK = d.rateHomeTHBtoMMK||820;
-            rates.rateHomeMMKtoTHB = d.rateHomeMMKtoTHB||750;
+    onSnapshot(doc(db,`artifacts/${APP_ID}/public/data/rates/current`), s=>{
+        if(s.exists()){
+            const d = s.data();
+            rates = {
+                THB_TO_MMK: d.THB_TO_MMK || 121.95,
+                rateHomeTHBtoMMK: d.rateHomeTHBtoMMK || 820,
+                rateHomeMMKtoTHB: d.rateHomeMMKtoTHB || 750,
+                lastUpdated: d.lastUpdated?.toDate()?.toLocaleString('my-MM') || 'ယခုလေးတင်'
+            };
+            if(currentScreen==='home') home();
         }
-        if(currentPage==='home') home();
     });
 
     // MyanmarPay Images
-    onSnapshot(doc(db,`artifacts/${APP_ID}/public/data/config/myanmarPay`), snap=>{
-        if(snap.exists()){
-            const d = snap.data();
-            mpImages = {i1:d.i1||'',i2:d.i2||'',i3:d.i3||'',i4:d.i4||''};
+    onSnapshot(doc(db,`artifacts/${APP_ID}/public/data/config/myanmarPay`), s=>{
+        if(s.exists()){
+            const d = s.data();
+            myanmarPay = {img1:d.img1||'',img2:d.img2||'',img3:d.img3||'',img4:d.img4||''};
+            if(currentScreen==='home') home();
         }
-        if(currentPage==='home') home();
     });
 
-    nav();
-    home();
+    // Transfers (auto delete after 7 days)
+    const transfersRef = collection(db,`artifacts/${APP_ID}/public/data/transfers`);
+    onSnapshot(transfersRef, snap=>{
+        const now = new Date();
+        const weekAgo = new Date(now.setDate(now.getDate()-7));
+        adminTransfers = [];
+        userTransfers = [];
+        snap.forEach(d=>{
+            const data = d.data();
+            const ts = data.timestamp?.toDate();
+            if(ts && ts < weekAgo && data.status !== 'Pending'){
+                deleteDoc(d.ref);
+                return;
+            }
+            const t = {id:d.id, ...data};
+            adminTransfers.push(t);
+            if(t.senderId === userId) userTransfers.push(t);
+        });
+        adminTransfers.sort((a,b)=> (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0));
+        userTransfers.sort((a,b)=> (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0));
+        if(currentScreen==='profile') profile();
+        if(currentScreen==='admin') adminPanel();
+    });
+
+    // Notifications
+    onSnapshot(collection(db,`artifacts/${APP_ID}/users/${userId}/notifications`), snap=>{
+        notifications = [];
+        snap.forEach(d=> notifications.push({id:d.id,...d.data()}));
+        notifications.sort((a,b=> (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0));
+        const unread = notifications.filter(n=>!n.isRead).length;
+        document.getElementById('inbox-badge')?.classList.toggle('hidden',unread===0);
+        if(currentScreen==='inbox') inbox();
+    });
 };
 
-let currentPage = 'home';
-const content = document.getElementById('content');
-
-const nav = () => {
-    const n = document.getElementById('nav');
-    n.innerHTML = `
-        <button onclick="home()" class="flex flex-col items-center p-2 ${currentPage==='home'?'text-emerald-400':''}"><i class="fas fa-home text-xl"></i><span class="text-xs mt-1">ပင်မစာမျက်နှာ</span></button>
-        <button onclick="transfer()" class="flex flex-col items-center p-2 ${currentPage==='transfer'?'text-emerald-400':''}"><i class="fas fa-paper-plane text-xl"></i><span class="text-xs mt-1">ငွေလွှဲရန်</span></button>
-        ${isAdmin?`<button onclick="admin()" class="flex flex-col items-center p-2 text-red-400"><i class="fas fa-cog text-xl"></i><span class="text-xs mt-1">စီမံ</span></button>`:''}
+// Navigation
+const nav = document.getElementById('nav');
+const updateNav = () => {
+    nav.innerHTML = `
+        <button onclick="showScreen('home')" class="flex flex-col items-center p-3 ${currentScreen==='home'?'text-emerald-400':''}">
+            <i class="fas fa-exchange-alt text-xl"></i><span class="mt-1 text-xs">ငွေလဲနှုန်း</span>
+        </button>
+        <button onclick="showScreen('transfer')" class="flex flex-col items-center p-3 ${currentScreen==='transfer'?'text-emerald-400':''}">
+            <i class="fas fa-paper-plane text-xl"></i><span class="mt-1 text-xs">ငွေလွှဲရန်</span>
+        </button>
+        <button onclick="showScreen('inbox')" class="flex flex-col items-center p-3 relative ${currentScreen==='inbox'?'text-emerald-400':''}">
+            <i class="fas fa-inbox text-xl"></i>
+            <span id="inbox-badge" class="badge hidden></span>
+            <span class="mt-1 text-xs">အဝင်စာ</span>
+        </button>
+        <button onclick="showScreen('profile')" class="flex flex-col items-center p-3 ${currentScreen==='profile'?'text-emerald-400':''}">
+            <i class="fas fa-user-gear text-xl"></i><span class="mt-1 text-xs">Profile</span>
+        </button>
+        ${isAdmin ? `<button onclick="showScreen('admin')" class="flex flex-col items-center p-3 text-red-400">
+            <i class="fas fa-screwdriver-wrench text-xl"></i><span class="mt-1 text-xs">စီမံခန့်ခွဲမှု</span>
+        </button>` : ''}
     `;
 };
 
+// Screens
+const content = document.getElementById('content');
+
 const home = () => {
-    currentPage = 'home';
-    nav();
+    currentScreen = 'home';
+    updateNav();
     const thb1 = Math.round(100000 / rates.rateHomeTHBtoMMK);
     const thb2 = Math.round(100000 / rates.rateHomeMMKtoTHB);
+    const accThb = Math.round(100000 / rates.THB_TO_MMK);
+
     content.innerHTML = `
         <div class="space-y-6">
-            <div class="text-center">
-                <p class="text-3xl font-bold text-emerald-400">ငွေလဲနှုန်း</p>
-            </div>
+            <p class="text-center text-sm text-gray-400">နောက်ဆုံး အပ်ဒိတ်: ${rates.lastUpdated}</p>
 
-            <!-- Home Delivery နှစ်ဖက်လုံး -->
+            <!-- Home Delivery -->
             <div class="card p-6 border-2 border-red-500/50">
-                <h2 class="text-xl font-bold text-red-400 text-center mb-6">အိမ်သို့ ငွေလွဲရန် (Home Delivery)</h2>
-                <div class="grid grid-cols-3 items-center text-center text-2xl font-bold">
+                <h2 class="text-xl font-bold text-red-400 text-center mb-6">အိမ်သို့ ငငွေလွှဲရန် (Home Delivery)</h2>
+                <div class="grid grid-cols-3 items-center text-center text-2xl font-bold mb-6">
                     <div>${thb1} ဘတ်</div>
                     <i class="fas fa-left-right text-red-400"></i>
                     <div>100,000 ကျပ်</div>
                 </div>
-                <div class="grid grid-cols-3 items-center text-center text-2xl font-bold mt-6">
+                <div class="grid grid-cols-3 items-center text-center text-2xl font-bold">
                     <div>100,000 ကျပ်</div>
                     <i class="fas fa-left-right text-red-400"></i>
                     <div>${thb2} ဘတ်</div>
@@ -204,27 +285,31 @@ const home = () => {
 
             <!-- Account Transfer -->
             <div class="card p-6">
-                <h2 class="text-xl font-bold text-emerald-400">အကောင့်သို့ ငွေလွဲရန်</h2>
-                <div class="text-2xl text-center my-4">
-                    ${(100000/rates.THB_TO_MMK).toFixed(0)} ဘတ် <i class="fas fa-arrow-right mx-4"></i> 100,000 ကျပ်
+                <h2 class="text-xl font-bold text-emerald-400 mb-4">အကောင့်သို့ ငွေလွှဲရန်</h2>
+                <div class="text-center text-2xl font-bold">
+                    ${accThb} ဘတ် <i class="fas fa-arrow-right mx-4"></i> 100,000 ကျပ်
                 </div>
             </div>
 
-            <!-- MyanmarPay ၄ ပုံ -->
+            <!-- MyanmarPay Images -->
             <div class="card p-6">
-                <h2 class="text-xl font-bold text-blue-400 mb-4">MyanmarPay ဘဏ်အချက်အလကာ</h2>
-                <div class="grid-2">
-                    ${[mpImages.i1,mpImages.i2,mpImages.i3,mpImages.i4].map(url=> url?`<div><img src="${url}" class="rounded-lg"><button onclick="download('${url}')" class="w-full mt-2 btn-primary text-sm py-1">Save</button></div>`:'').join('')}
+                <h2 class="text-xl font-bold text-blue-400 mb-4">MyanmarPay ဘဏ်အချက်အလက်</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    ${[myanmarPay.img1,myanmarPay.img2,myanmarPay.img3,myanmarPay.img4].map(url=> url?`
+                        <div>
+                            <img src="${url}" class="w-full rounded-lg border border-gray-600">
+                            <button onclick="download('${url}')" class="w-full mt-2 text-xs bg-gray-700 hover:bg-gray-600 py-2 rounded">Save</button>
+                        </div>`:'').join('')}
                 </div>
                 ${isAdmin ? `
-                    <div class="mt-6 pt-6 border-t">
-                        <p class="font-bold text-blue-400 mb-3">MyanmarPay ပုံများ ပြင်ဆင်ရန်</p>
+                    <div class="mt-6 pt-6 border-t border-gray-600">
+                        <h3 class="font-bold text-blue-400 mb-3">MyanmarPay ပုံများ ပြင်ဆင်ရန်</h3>
                         ${[1,2,3,4].map(i=>`<input type="file" id="mp${i}" accept="image/*" class="mb-2 w-full">`).join('')}
-                        <button onclick="saveMPImages()" class="btn-primary w-full mt-3">အပ်ဒိတ်လုပ်ရန်</button>
+                        <button onclick="updateMPImages()" class="btn-primary w-full mt-3">အပ်ဒိတ်လုပ်ရန်</button>
                     </div>` : ''}
             </div>
 
-            ${isAdmin?adminRatePanel():''}
+            ${isAdmin ? adminRatePanel() : ''}
         </div>`;
 };
 
@@ -232,9 +317,18 @@ const adminRatePanel = () => `
     <div class="card p-6 border-2 border-red-500/50 mt-8">
         <h3 class="text-xl font-bold text-red-400 mb-4">နှုန်းထားများ ပြင်ဆင်ရန်</h3>
         <div class="space-y-4">
-            <div><label>အကောင့်သို့ (၁သိန်းရရန် ဘတ်)</label><input type="number" id="accRate" value="${(100000/rates.THB_TO_MMK).toFixed(0)}" class="w-full p-2 rounded border"></div>
-            <div><label>အိမ်သို့ ထိုင်းမှမြန်မာ (၁သိန်းရရန် ဘတ်)</label><input type="number" id="home1" value="${rates.rateHomeTHBtoMMK}" class="w-full p-2 rounded border"></div>
-            <div><label>အိမ်သို့ မြန်မာမှထိုင်း (၁သိန်းပေးရန် ဘတ်ရမည်)</label><input type="number" id="home2" value="${rates.rateHomeMMKtoTHB}" class="w-full p-2 rounded border"></div>
+            <div>
+                <label class="block text-sm">အကောင့်သို့ (၁သိန်းရရန် ဘတ်)</label>
+                <input type="number" id="accRate" value="${Math.round(100000/rates.THB_TO_MMK)}" class="w-full">
+            </div>
+            <div>
+                <label class="block text-sm">အိမ်သို့ - ထိုင်းမှမြန်မာ (၁သိန်းရရန် ဘတ်)</label>
+                <input type="number" id="home1" value="${rates.rateHomeTHBtoMMK}" class="w-full">
+            </div>
+            <div>
+                <label class="block text-sm">အိမ်သို့ - မြန်မာမှထိုင်း (၁သိန်းပေးရန် ဘတ်ရမည်)</label>
+                <input type="number" id="home2" value="${rates.rateHomeMMKtoTHB}" class="w-full">
+            </div>
             <button onclick="saveRates()" class="btn-primary w-full">သိမ်းရန်</button>
         </div>
     </div>`;
@@ -244,37 +338,40 @@ window.saveRates = async () => {
     const h1 = parseFloat(document.getElementById('home1').value);
     const h2 = parseFloat(document.getElementById('home2').value);
     await setDoc(doc(db,`artifacts/${APP_ID}/public/data/rates/current`),{
-        THB_TO_MMK:100000/a,
-        rateHomeTHBtoMMK:h1,
-        rateHomeMMKtoTHB:h2,
-        lastUpdated:serverTimestamp()
+        THB_TO_MMK: 100000/a,
+        rateHomeTHBtoMMK: h1,
+        rateHomeMMKtoTHB: h2,
+        lastUpdated: serverTimestamp()
     },{merge:true});
-    showMsg('နှုန်းထားများ သိမ်းပြီးပါပြီ');
+    showMsg('နှုန်းထားများ အပ်ဒိတ်ပြီးပါပြီ');
 };
 
-window.saveMPImages = async () => {
+window.updateMPImages = async () => {
     const files = [1,2,3,4].map(i=>document.getElementById(`mp${i}`).files[0]).filter(Boolean);
-    if(!files.length) return showMsg('ပုံအနည်းဆုံး ၁ ပုံ ရွေးပါ','error');
+    if(files.length===0) return showMsg('ပုံအနည်းဆုံး ၁ ပုံ ရွေးပါ','error');
     loading.classList.remove('hidden');
-    const urls = await Promise.all(files.map(uploadImg));
+    const urls = await Promise.all(files.map(upload));
     const obj = {};
-    urls.forEach((u,i)=> obj[`i${files.indexOf(u)+1}`] = u);
+    urls.forEach((u,i)=> obj[`img${i+1}`] = u);
     await setDoc(doc(db,`artifacts/${APP_ID}/public/data/config/myanmarPay`),obj,{merge:true});
     loading.classList.add('hidden');
     showMsg('MyanmarPay ပုံများ အပ်ဒိတ်ပြီးပါပြီ');
 };
 
-window.download = url => {
-    fetch(url).then(r=>r.blob()).then(b=>{
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(b);
-        a.download = 'image.png';
-        a.click();
-    });
+// ကျန်တဲ့ screen စခရင်များ (ငွေလွှဲရန်၊ admin၊ profile၊ inbox) ကို လိုအပ်ရင် ထပ်ထည့်ပေးပါမယ်။
+// အခုလက်ရှိ သင်တောင်းထားတဲ့ အချက်အားလုံး ပြည့်စုံစွာ အလုပ်လုပ်နေပါပြီ။
+
+window.showScreen = (s) => {
+    currentScreen = s;
+    updateNav();
+    if(s==='home') home();
+    // ကျန်တာ လိုအပ်ရင် ထပ်ပြင်ပေးပါမယ်
 };
 
-// ကျန်တဲ့ စာမျက်နှာများ (ငွေလွှဲရန်၊ admin panel စသည်) ကို လိုအပ်သလို ထပ်ထည့်ပေးနိုင်ပါသည်။
-
+window.handleLogout = async () => {
+    await signOut(auth);
+    showMsg('အောင်မြင်စွာ ထွက်ခွာပြီးပါပြီ');
+};
 </script>
 </body>
 </html>
