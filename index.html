@@ -109,6 +109,21 @@
             right: 10px;
             z-index: 100;
         }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -211,6 +226,7 @@
         let userTransfers = [];
         let adminTransfers = [];
         let userNotifications = [];
+        let adminNotifications = [];
 
         // Translations
         const translations = {
@@ -272,7 +288,9 @@
                 language: "ဘာသာစကား (Language)",
                 contact: "ဆက်သွယ်ရန်",
                 success: "အောင်မြင်ပါသည်",
-                error: "အမှားရှိပါသည်"
+                error: "အမှားရှိပါသည်",
+                adminNotifications: "Admin အသိပေးချက်များ",
+                markAllRead: "အားလုံးဖတ်ပြီးအဖြစ် မှတ်ရန်"
             },
             en: {
                 appTitle: "Thai-Myanmar Remittance",
@@ -332,7 +350,9 @@
                 language: "Language",
                 contact: "Contact",
                 success: "Success",
-                error: "Error"
+                error: "Error",
+                adminNotifications: "Admin Notifications",
+                markAllRead: "Mark All as Read"
             }
         };
 
@@ -461,6 +481,8 @@
                         userEmail = user.email;
                         isAdmin = user.email === ADMIN_EMAIL;
                         
+                        console.log('User logged in:', { userId, userEmail, isAdmin });
+                        
                         document.getElementById('auth-screen').classList.add('hidden');
                         document.getElementById('app-content-wrapper').classList.remove('hidden');
 
@@ -472,6 +494,11 @@
                             loadPaymentMethodImages();
                             loadTransfers();
                             loadNotifications();
+                            
+                            // Load admin notifications if admin
+                            if (isAdmin) {
+                                loadAdminNotifications();
+                            }
                             
                             // Auto delete old transfers for admin
                             if (isAdmin) {
@@ -573,8 +600,11 @@
 
         const updateStaticText = () => {
             const adminButtonHtml = isAdmin ? `
-                <button onclick="showScreen('admin')" id="admin-nav-button" class="nav-button flex flex-col items-center p-2 rounded-lg text-red-400 hover:text-red-300">
+                <button onclick="showScreen('admin')" id="admin-nav-button" class="nav-button flex flex-col items-center p-2 rounded-lg text-red-400 hover:text-red-300 relative">
                     <i class="fa-solid fa-screwdriver-wrench text-xl"></i>
+                    ${adminNotifications.length > 0 ? `
+                        <span class="notification-badge">${adminNotifications.length}</span>
+                    ` : ''}
                     <span class="mt-1">${t('admin')}</span>
                 </button>
             ` : '';
@@ -741,32 +771,58 @@
             });
         };
 
+        const loadAdminNotifications = () => {
+            if (!isAdmin) return;
+            
+            const adminNotificationsColRef = collection(db, PUBLIC_DATA_PATH, 'adminNotifications');
+            
+            onSnapshot(adminNotificationsColRef, (snapshot) => {
+                adminNotifications = [];
+                snapshot.forEach((doc) => {
+                    adminNotifications.push({ id: doc.id, ...doc.data() });
+                });
+                
+                adminNotifications.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                
+                // Update admin button badge
+                updateStaticText();
+                
+                if (currentScreen === 'admin') renderAdminPanel();
+            }, (error) => {
+                console.error("Error fetching admin notifications: ", error);
+            });
+        };
+
         // Send notification to admin
         const sendAdminNotification = async (transferId, transferData) => {
             try {
-                // Check if admin is logged in (has a user document)
-                const adminNotificationsRef = collection(db, `artifacts/${APP_ID}/users`, 'admin-notifications');
+                const adminNotificationsRef = collection(db, PUBLIC_DATA_PATH, 'adminNotifications');
                 
                 await addDoc(adminNotificationsRef, {
                     type: 'NEW_TRANSFER',
                     title: 'New Transfer Request',
-                    message: `New transfer from ${transferData.senderName} for ${transferData.amountTHB} THB`,
+                    message: `New transfer from ${transferData.senderName} (${transferData.senderEmail}) for ${transferData.amountTHB} THB to ${transferData.amountMMK} MMK`,
                     transferId: transferId,
                     transferData: transferData,
+                    senderId: userId,
+                    senderEmail: userEmail,
+                    senderName: transferData.senderName,
                     isRead: false,
                     timestamp: serverTimestamp()
                 });
                 
-                console.log('Admin notification sent');
+                console.log('Admin notification sent successfully');
+                return true;
             } catch (error) {
                 console.error('Error sending admin notification:', error);
+                return false;
             }
         };
 
         // Send notification to user
-        const sendUserNotification = async (userId, title, message, imageURL = '', transferId = '') => {
+        const sendUserNotification = async (receiverUserId, title, message, imageURL = '', transferId = '') => {
             try {
-                const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications'));
+                const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${receiverUserId}`, 'notifications'));
                 await setDoc(notificationRef, {
                     title: title,
                     message: message,
@@ -775,9 +831,23 @@
                     timestamp: serverTimestamp(),
                     relatedTransferId: transferId
                 });
-                console.log('User notification sent');
+                console.log('User notification sent to:', receiverUserId);
+                return true;
             } catch (error) {
                 console.error('Error sending user notification:', error);
+                return false;
+            }
+        };
+
+        // Mark admin notification as read
+        const markAdminNotificationAsRead = async (notificationId) => {
+            if (!isAdmin) return;
+            try {
+                const docRef = doc(db, PUBLIC_DATA_PATH, 'adminNotifications', notificationId);
+                await updateDoc(docRef, { isRead: true });
+                console.log('Admin notification marked as read:', notificationId);
+            } catch (error) {
+                console.error('Error marking admin notification as read:', error);
             }
         };
 
@@ -1048,15 +1118,6 @@
                         </div>
                         <button type="submit" class="btn-primary w-full py-2 rounded-lg font-semibold text-sm">Payment Method ပုံများ အပ်ဒိတ်လုပ်ရန်</button>
                     </form>
-                    
-                    <!-- Auto Delete Settings -->
-                    <div class="mt-6 pt-4 border-t border-gray-600">
-                        <h3 class="text-lg font-semibold text-yellow-400 mb-2">အလိုအလျောက် ဖျက်သိမ်းခြင်း</h3>
-                        <p class="text-sm text-gray-300">ငွေလွဲစာရင်းများကို ၇ ရက်ကျော်သွားပါက အလိုအလျောက် ဖျက်သိမ်းပါမည်။</p>
-                        <button onclick="autoDeleteOldTransfers()" class="w-full py-2 rounded-lg font-semibold bg-yellow-600 text-white mt-3 hover:bg-yellow-500">
-                            <i class="fa-solid fa-trash-can mr-2"></i> လက်ရှိ ၇ ရက်ကျော်သော စာရင်းများ ဖျက်ရန်
-                        </button>
-                    </div>
                 </div>
             `;
         };
@@ -1398,8 +1459,14 @@
                 
                 await setDoc(newTransferRef, transferData);
 
-                // Send notification to admin
-                await sendAdminNotification(newTransferRef.id, transferData);
+                // Send notification to admin with ALL user data
+                const adminNotificationSuccess = await sendAdminNotification(newTransferRef.id, transferData);
+                
+                if (adminNotificationSuccess) {
+                    console.log('Admin notification sent successfully');
+                } else {
+                    console.log('Failed to send admin notification');
+                }
                 
                 // Send confirmation notification to user
                 await sendUserNotification(
@@ -1431,12 +1498,36 @@
             if (!isAdmin) return showScreen('home');
             
             const pendingTransfers = adminTransfers.filter(t => t.status === 'Pending');
+            const unreadAdminNotifications = adminNotifications.filter(n => !n.isRead);
+            
             const content = document.getElementById('content-area');
 
             content.innerHTML = `
                 <div class="space-y-6">
                     <h2 class="text-2xl font-bold text-red-400">${t('adminPanel')} (${pendingTransfers.length})</h2>
                     <p class="text-sm text-gray-400">${t('pending')}</p>
+                    
+                    <!-- Admin Notifications -->
+                    ${unreadAdminNotifications.length > 0 ? `
+                        <div class="card p-4 rounded-xl border-2 border-yellow-500">
+                            <h3 class="text-lg font-bold text-yellow-400 mb-2">${t('adminNotifications')} (${unreadAdminNotifications.length})</h3>
+                            <div class="space-y-2">
+                                ${unreadAdminNotifications.slice(0, 3).map(n => `
+                                    <div class="p-3 bg-gray-700 rounded-lg">
+                                        <p class="font-medium">${n.title}</p>
+                                        <p class="text-sm text-gray-300">${n.message}</p>
+                                        <p class="text-xs text-gray-500 mt-1">${n.timestamp ? n.timestamp.toDate().toLocaleString('my-MM') : ''}</p>
+                                        <button onclick="markAdminNotificationAsRead('${n.id}')" class="text-xs text-blue-400 hover:text-blue-300 mt-2">
+                                            ${t('markAllRead')}
+                                        </button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            ${unreadAdminNotifications.length > 3 ? `
+                                <p class="text-sm text-gray-400 mt-2">+ ${unreadAdminNotifications.length - 3} more notifications</p>
+                            ` : ''}
+                        </div>
+                    ` : ''}
 
                     <div id="admin-transfers-list" class="space-y-3">
                         ${pendingTransfers.length === 0 ? 
@@ -1446,7 +1537,7 @@
                                     <div class="flex justify-between items-center">
                                         <div>
                                             <p class="font-bold text-lg text-emerald-400">${t.senderName || 'N/A'}</p>
-                                            <p class="text-xs text-gray-400">${t.senderEmail}</p>
+                                            <p class="text-xs text-gray-400">${t.senderEmail} (ID: ${t.senderId?.substring(0, 8)}...)</p>
                                         </div>
                                         <div class="text-right">
                                             <span class="text-sm font-semibold px-2 py-1 rounded-full ${t.transferType === 'home' ? 'bg-red-600' : 'bg-blue-600'} text-white">
@@ -1458,6 +1549,15 @@
                                 </div>
                             `).join('')
                         }
+                    </div>
+                    
+                    <!-- Auto Delete Section -->
+                    <div class="card p-4 rounded-xl border border-yellow-500/50">
+                        <h3 class="text-lg font-semibold text-yellow-400 mb-2">အလိုအလျောက် ဖျက်သိမ်းခြင်း</h3>
+                        <p class="text-sm text-gray-300">ငွေလွဲစာရင်းများကို ၇ ရက်ကျော်သွားပါက အလိုအလျောက် ဖျက်သိမ်းပါမည်။</p>
+                        <button onclick="autoDeleteOldTransfers()" class="w-full py-2 rounded-lg font-semibold bg-yellow-600 text-white mt-3 hover:bg-yellow-500">
+                            <i class="fa-solid fa-trash-can mr-2"></i> လက်ရှိ ၇ ရက်ကျော်သော စာရင်းများ ဖျက်ရန်
+                        </button>
                     </div>
                 </div>
             `;
@@ -1481,6 +1581,7 @@
                     <div class="card p-5 rounded-xl space-y-3">
                         <p><strong>${currentLanguage === 'my' ? 'ငွေလွဲသူ (Name):' : 'Sender:'}</strong> ${transfer.senderName}</p>
                         <p><strong>Email:</strong> ${transfer.senderEmail}</p>
+                        <p><strong>User ID:</strong> ${transfer.senderId}</p>
                         <p><strong>${currentLanguage === 'my' ? 'Phone (TH):' : 'Phone (TH):'}</strong> ${transfer.senderPhoneTH}</p>
                         <p><strong>${currentLanguage === 'my' ? 'လက်ခံသူ (Name):' : 'Receiver:'}</strong> ${transfer.receiverName}</p>
                         <p><strong>${currentLanguage === 'my' ? 'Phone (MM):' : 'Phone (MM):'}</strong> ${transfer.receiverPhoneMM}</p>
@@ -1576,6 +1677,17 @@
 
                 if (message.includes('Completed') || message.includes('ပြီးပါပြီ')) {
                     await updateDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', transferId), { status: 'Completed' });
+                    
+                    // Send completion notification to user
+                    await sendUserNotification(
+                        transfer.senderId,
+                        currentLanguage === 'my' ? '✅ ငွေလွဲမှု အောင်မြင်ပါသည်။' : '✅ Transfer Completed',
+                        currentLanguage === 'my' ? 
+                            `သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးပါပြီ။` :
+                            `Your transfer of ${transfer.amountTHB.toFixed(2)} THB ➜ ${transfer.amountMMK.toFixed(0)} MMK has been completed successfully.`,
+                        '',
+                        transferId
+                    );
                 }
 
                 showMessage(currentLanguage === 'my' ? 'User သို့ အကြောင်းပြန်ကြားချက် ပို့ပြီးပါပြီ။' : 'Reply sent to user', 'success');
@@ -1682,6 +1794,7 @@
                         <div class="space-y-3">
                             <p><strong>${currentLanguage === 'my' ? 'Username:' : 'Username:'}</strong> ${userDisplayName || 'N/A'}</p>
                             <p><strong>Email:</strong> ${userEmail}</p>
+                            <p><strong>User ID:</strong> ${userId ? userId.substring(0, 12) + '...' : 'N/A'}</p>
                         </div>
                         
                         <form id="update-profile-form" onsubmit="event.preventDefault(); updateProfileName()" class="mt-4 pt-4 border-t border-gray-600">
@@ -1915,6 +2028,7 @@
         window.updatePaymentMethodImages = updatePaymentMethodImages;
         window.autoDeleteOldTransfers = autoDeleteOldTransfers;
         window.setLanguage = setLanguage;
+        window.markAdminNotificationAsRead = markAdminNotificationAsRead;
 
     </script>
 </body>
