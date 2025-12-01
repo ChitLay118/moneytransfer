@@ -183,6 +183,7 @@
         let userTransfers = [];
         let adminTransfers = [];
         let userNotifications = [];
+        let adminNotifications = [];
 
         // Auto delete old transfers (7 days)
         const AUTO_DELETE_DAYS = 7;
@@ -303,6 +304,7 @@
                             loadAdminBankInfo();
                             loadTransfers();
                             loadNotifications();
+                            loadAdminNotifications();
                             showScreen('home'); 
                             
                             // Run auto-delete check if admin
@@ -559,6 +561,72 @@
             }, (error) => {
                 console.error("Error fetching notifications: ", error);
             });
+        };
+
+        const loadAdminNotifications = () => {
+            if (!isAuthReady || !userId || !isAdmin) return;
+            
+            const notificationsColRef = collection(db, PUBLIC_DATA_PATH, 'notifications');
+            
+            onSnapshot(notificationsColRef, (snapshot) => {
+                adminNotifications = [];
+                snapshot.forEach((doc) => {
+                    adminNotifications.push({ id: doc.id, ...doc.data() });
+                });
+                
+                adminNotifications.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                
+                if (currentScreen === 'admin') renderAdminPanel();
+            }, (error) => {
+                console.error("Error fetching admin notifications: ", error);
+            });
+        };
+
+        // Send notification to all users
+        const sendNotificationToAllUsers = async (title, message, imageURL = '') => {
+            if (!isAdmin) return;
+            
+            document.getElementById('loading-overlay').classList.remove('hidden');
+            
+            try {
+                // First, get all users
+                const usersSnapshot = await getDocs(collection(db, `artifacts/${APP_ID}/users`));
+                const users = [];
+                usersSnapshot.forEach((doc) => {
+                    users.push(doc.id);
+                });
+                
+                // Send notification to each user
+                for (const userId of users) {
+                    const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications'));
+                    await setDoc(notificationRef, {
+                        title,
+                        message,
+                        imageURL,
+                        isRead: false,
+                        timestamp: serverTimestamp(),
+                        isAdminNotification: true
+                    });
+                }
+                
+                // Also save to admin notifications collection
+                const adminNotificationRef = doc(collection(db, PUBLIC_DATA_PATH, 'notifications'));
+                await setDoc(adminNotificationRef, {
+                    title,
+                    message,
+                    imageURL,
+                    timestamp: serverTimestamp(),
+                    sentBy: ADMIN_EMAIL
+                });
+                
+                showMessage('အသုံးပြုသူအားလုံးထံ မက်ဆေ့ခ်ျပို့ပြီးပါပြီ။');
+                
+            } catch (error) {
+                console.error("Error sending notifications to all users:", error);
+                showMessage('မက်ဆေ့ခ်ျပို့ရာတွင် အမှားရှိပါသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
         };
 
         // --- UI Rendering Functions ---
@@ -941,11 +1009,15 @@
                                 class="tab-button flex-1 py-3 text-sm font-medium text-gray-400 hover:text-emerald-400 ${currentTransferTab === 'home' ? 'active' : ''}">
                             <i class="fa-solid fa-house-chimney-user mr-2"></i> အိမ်အရောက် ပို့ရန်
                         </button>
+                        <button id="tab-phone-bill" onclick="setTransferTab('phone-bill')" 
+                                class="tab-button flex-1 py-3 text-sm font-medium text-gray-400 hover:text-emerald-400 ${currentTransferTab === 'phone-bill' ? 'active' : ''}">
+                            <i class="fa-solid fa-mobile-alt mr-2"></i> ဖုန်းဘေထည့်ရန်
+                        </button>
                     </div>
 
                     <!-- Transfer Form Section -->
                     <div class="card p-5 rounded-xl">
-                        <h2 class="text-xl font-bold mb-4" id="transfer-form-title">${currentTransferTab === 'account' ? 'MyanmarPay သို့ ငွေလွဲရန်' : 'အိမ်အရောက် ပို့ရန်'} ဖောင်</h2>
+                        <h2 class="text-xl font-bold mb-4" id="transfer-form-title">${getTransferTitle()} ဖောင်</h2>
                         <form id="transfer-form" onsubmit="event.preventDefault(); submitTransfer('${currentTransferTab}')">
                             <div class="space-y-4">
                                 
@@ -971,8 +1043,8 @@
                                     <input type="hidden" id="transferAccountType" ${currentTransferTab === 'account' ? 'required' : ''}>
                                 </div>
 
-                                <!-- Phone Bill Type Selection (ONLY for Account Tab) -->
-                                <div id="phone-bill-field" class="${currentTransferTab === 'account' ? '' : 'hidden'}">
+                                <!-- Phone Bill Type Selection (ONLY for Phone Bill Tab) -->
+                                <div id="phone-bill-field" class="${currentTransferTab === 'phone-bill' ? '' : 'hidden'}">
                                     <label for="phoneBillType" class="block text-sm font-medium mb-2">ဆင်းအမျိုးအစားရွေးရန် (ရွေးချယ်ပါ)</label>
                                     <div class="grid grid-cols-2 gap-3">
                                         <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('ATOM')">
@@ -1000,7 +1072,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <input type="hidden" id="phoneBillType" ${currentTransferTab === 'account' ? 'required' : ''}>
+                                    <input type="hidden" id="phoneBillType" ${currentTransferTab === 'phone-bill' ? 'required' : ''}>
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-4">
@@ -1021,14 +1093,14 @@
                                     </div>
                                     <div>
                                         <label for="receiverPhoneMM" class="block text-sm font-medium">ဖုန်းနံပါတ် (မြန်မာ)</label>
-                                        <input type="tel" id="receiverPhoneMM" required class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                        <input type="tel" id="receiverPhoneMM" ${currentTransferTab !== 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
                                     </div>
                                 </div>
                                 
-                                <!-- Phone Number for Bill (ONLY for Account Tab) -->
-                                <div id="phone-bill-number-field" class="${currentTransferTab === 'account' ? '' : 'hidden'}">
+                                <!-- Phone Number for Bill (ONLY for Phone Bill Tab) -->
+                                <div id="phone-bill-number-field" class="${currentTransferTab === 'phone-bill' ? '' : 'hidden'}">
                                     <label for="phoneBillNumber" class="block text-sm font-medium text-purple-400">ဖုန်းဘေထည့်ရန် ဖုန်းနံပါတ်</label>
-                                    <input type="tel" id="phoneBillNumber" ${currentTransferTab === 'account' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                    <input type="tel" id="phoneBillNumber" ${currentTransferTab === 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
                                     <p class="text-xs text-purple-400 mt-1">** ဖုန်းဘေထည့်ရန် ဖုန်းနံပါတ်ကို ထည့်သွင်းပေးပါ</p>
                                 </div>
                                 
@@ -1037,10 +1109,7 @@
                                     <label for="amountInput" class="block text-sm font-medium">ငွေလွဲမည့် ပမာဏ</label>
                                     <div class="mt-1 flex rounded-lg shadow-sm">
                                         <select id="amountDirection" onchange="updateCalculatedAmount()" class="p-2 border border-r-0 rounded-l-lg focus:ring-emerald-500 focus:border-emerald-500">
-                                            ${currentTransferTab === 'account' ? 
-                                                '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option>' : 
-                                                '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option><option value="MMK_THB">ကျပ် ➜ ဘတ်</option>'
-                                            }
+                                            ${getAmountDirectionOptions()}
                                         </select>
                                         <input type="number" id="amountInput" step="0.01" min="1" required class="flex-grow p-2 border focus:ring-emerald-500 focus:border-emerald-500" placeholder="1000">
                                     </div>
@@ -1081,8 +1150,8 @@
             document.getElementById('amountDirection').addEventListener('change', updateCalculatedAmount);
             
             // Initialize payment method selection
-            if (currentTransferTab === 'account') {
-                setTimeout(() => {
+            setTimeout(() => {
+                if (currentTransferTab === 'account') {
                     window.selectPaymentMethod = (method) => {
                         document.getElementById('transferAccountType').value = method;
                         const items = document.querySelectorAll('#account-type-field > div > div');
@@ -1093,7 +1162,9 @@
                         event.currentTarget.classList.add('border-emerald-500', 'bg-gray-700');
                         event.currentTarget.classList.remove('border-gray-600');
                     };
-                    
+                }
+                
+                if (currentTransferTab === 'phone-bill') {
                     window.selectPhoneBillType = (type) => {
                         document.getElementById('phoneBillType').value = type;
                         const items = document.querySelectorAll('#phone-bill-field > div > div');
@@ -1104,7 +1175,29 @@
                         event.currentTarget.classList.add('border-purple-500', 'bg-gray-700');
                         event.currentTarget.classList.remove('border-gray-600');
                     };
-                }, 100);
+                }
+            }, 100);
+        };
+
+        const getTransferTitle = () => {
+            switch(currentTransferTab) {
+                case 'account': return 'MyanmarPay သို့ ငွေလွဲရန်';
+                case 'home': return 'အိမ်အရောက် ပို့ရန်';
+                case 'phone-bill': return 'ဖုန်းဘေထည့်ရန်';
+                default: return 'MyanmarPay သို့ ငွေလွဲရန်';
+            }
+        };
+
+        const getAmountDirectionOptions = () => {
+            switch(currentTransferTab) {
+                case 'account':
+                    return '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option>';
+                case 'home':
+                    return '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option><option value="MMK_THB">ကျပ် ➜ ဘတ်</option>';
+                case 'phone-bill':
+                    return '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option>';
+                default:
+                    return '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option>';
             }
         };
 
@@ -1122,13 +1215,11 @@
             
             if (direction === 'THB_MMK') {
                 if (currentTransferTab === 'account') {
-                    // Check if phone bill is selected
-                    const phoneBillType = document.getElementById('phoneBillType')?.value;
-                    if (phoneBillType) {
-                        result = input * currentRates.THB_TO_MMK_PHONE;
-                    } else {
-                        result = input * currentRates.THB_TO_MMK;
-                    }
+                    result = input * currentRates.THB_TO_MMK;
+                    fromCurrency = 'ဘတ်';
+                    toCurrency = 'ကျပ်';
+                } else if (currentTransferTab === 'phone-bill') {
+                    result = input * currentRates.THB_TO_MMK_PHONE;
                     fromCurrency = 'ဘတ်';
                     toCurrency = 'ကျပ်';
                 } else {
@@ -1148,12 +1239,17 @@
         const setTransferTab = (tab) => {
             currentTransferTab = tab;
             
+            // Reset all tabs
             document.getElementById('tab-account').classList.remove('active');
             document.getElementById('tab-home').classList.remove('active');
+            document.getElementById('tab-phone-bill').classList.remove('active');
+            
+            // Activate current tab
             document.getElementById(`tab-${tab}`).classList.add('active');
             
-            document.getElementById('transfer-form-title').textContent = `${tab === 'account' ? 'MyanmarPay သို့ ငွေလွဲရန်' : 'အိမ်အရောက် ပို့ရန်'} ဖောင်`;
+            document.getElementById('transfer-form-title').textContent = `${getTransferTitle()} ဖောင်`;
             
+            // Show/hide relevant fields
             const accountTypeField = document.getElementById('account-type-field');
             const accountTypeInput = document.getElementById('transferAccountType');
             const phoneBillField = document.getElementById('phone-bill-field');
@@ -1165,33 +1261,38 @@
             const addressField = document.getElementById('home-address-field');
             const addressInput = document.getElementById('deliveryAddress');
             const amountDirection = document.getElementById('amountDirection');
+            const receiverPhoneMM = document.getElementById('receiverPhoneMM');
+
+            // Reset all fields first
+            accountTypeField.classList.add('hidden');
+            accountTypeInput.removeAttribute('required');
+            phoneBillField.classList.add('hidden');
+            phoneBillTypeInput.removeAttribute('required');
+            phoneBillNumberField.classList.add('hidden');
+            phoneBillNumberInput.removeAttribute('required');
+            bankQrField.classList.add('hidden');
+            bankQrInput.removeAttribute('required');
+            addressField.classList.add('hidden');
+            addressInput.removeAttribute('required');
+            receiverPhoneMM.setAttribute('required', 'required');
 
             if (tab === 'account') {
                 accountTypeField.classList.remove('hidden');
                 accountTypeInput.setAttribute('required', 'required');
+                bankQrField.classList.remove('hidden');
+                bankQrInput.setAttribute('required', 'required');
+                amountDirection.innerHTML = getAmountDirectionOptions();
+            } else if (tab === 'home') {
+                addressField.classList.remove('hidden');
+                addressInput.setAttribute('required', 'required');
+                amountDirection.innerHTML = getAmountDirectionOptions();
+            } else if (tab === 'phone-bill') {
                 phoneBillField.classList.remove('hidden');
                 phoneBillTypeInput.setAttribute('required', 'required');
                 phoneBillNumberField.classList.remove('hidden');
                 phoneBillNumberInput.setAttribute('required', 'required');
-                bankQrField.classList.remove('hidden');
-                bankQrInput.setAttribute('required', 'required');
-                addressField.classList.add('hidden');
-                addressInput.removeAttribute('required');
-                // Only show THB to MMK for account transfer
-                amountDirection.innerHTML = '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option>';
-            } else {
-                accountTypeField.classList.add('hidden');
-                accountTypeInput.removeAttribute('required');
-                phoneBillField.classList.add('hidden');
-                phoneBillTypeInput.removeAttribute('required');
-                phoneBillNumberField.classList.add('hidden');
-                phoneBillNumberInput.removeAttribute('required');
-                bankQrField.classList.add('hidden');
-                bankQrInput.removeAttribute('required');
-                addressField.classList.remove('hidden');
-                addressInput.setAttribute('required', 'required');
-                // Show both directions for home delivery
-                amountDirection.innerHTML = '<option value="THB_MMK">ဘတ် ➜ ကျပ်</option><option value="MMK_THB">ကျပ် ➜ ဘတ်</option>';
+                receiverPhoneMM.removeAttribute('required');
+                amountDirection.innerHTML = getAmountDirectionOptions();
             }
             
             document.getElementById('transfer-form').onsubmit = (e) => {
@@ -1208,12 +1309,12 @@
 
             const form = document.getElementById('transfer-form');
             const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
-            const phoneBillType = transferType === 'account' ? document.getElementById('phoneBillType').value : 'N/A';
-            const phoneBillNumber = transferType === 'account' ? document.getElementById('phoneBillNumber').value : 'N/A';
+            const phoneBillType = transferType === 'phone-bill' ? document.getElementById('phoneBillType').value : 'N/A';
+            const phoneBillNumber = transferType === 'phone-bill' ? document.getElementById('phoneBillNumber').value : 'N/A';
             const senderName = document.getElementById('senderName').value;
             const senderPhoneTH = document.getElementById('senderPhoneTH').value;
             const receiverName = document.getElementById('receiverName').value;
-            const receiverPhoneMM = document.getElementById('receiverPhoneMM').value;
+            const receiverPhoneMM = transferType !== 'phone-bill' ? document.getElementById('receiverPhoneMM').value : 'N/A';
             const amountInput = parseFloat(document.getElementById('amountInput').value);
             const amountDirection = document.getElementById('amountDirection').value;
             const receiptFileInput = document.getElementById('receiptFile');
@@ -1234,20 +1335,22 @@
                 return showMessage('ဘဏ် QR ပုံကို မဖြစ်မနေ ထည့်သွင်းပေးပါ', 'error');
             }
 
-            if (transferType === 'account' && (!transferAccountType || !phoneBillType || !phoneBillNumber)) {
-                return showMessage('ငွေပို့ထားသည့် အကောင့်၊ ဆင်းအမျိုးအစားနှင့် ဖုန်းနံပါတ်ကို ရွေးချယ်ပါ', 'error');
+            if (transferType === 'account' && !transferAccountType) {
+                return showMessage('ငွေပို့ထားသည့် အကောင့်ကို ရွေးချယ်ပါ', 'error');
+            }
+
+            if (transferType === 'phone-bill' && (!phoneBillType || !phoneBillNumber)) {
+                return showMessage('ဆင်းအမျိုးအစားနှင့် ဖုန်းနံပါတ်ကို ရွေးချယ်ပါ', 'error');
             }
 
             let amountTHB, amountMMK;
             if (amountDirection === 'THB_MMK') {
                 if (transferType === 'account') {
                     amountTHB = amountInput;
-                    // Check if phone bill is selected
-                    if (phoneBillType) {
-                        amountMMK = amountInput * currentRates.THB_TO_MMK_PHONE;
-                    } else {
-                        amountMMK = amountInput * currentRates.THB_TO_MMK;
-                    }
+                    amountMMK = amountInput * currentRates.THB_TO_MMK;
+                } else if (transferType === 'phone-bill') {
+                    amountTHB = amountInput;
+                    amountMMK = amountInput * currentRates.THB_TO_MMK_PHONE;
                 } else {
                     amountTHB = amountInput;
                     amountMMK = amountInput * (100000 / currentRates.rateHomeDeliveryTHB_THB_MMK);
@@ -1324,6 +1427,10 @@
                             '<p class="text-gray-400 p-4 card rounded-lg text-center">စစ်ဆေးရန် ငွေလွဲမှုများ မရှိပါ</p>' :
                             pendingTransfers.map(t => {
                                 const phoneBillInfo = t.phoneBillType ? `(${t.phoneBillType}: ${t.phoneBillNumber})` : '';
+                                const transferTypeLabel = t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 
+                                                         t.transferType === 'phone-bill' ? 'ဖုန်းဘေထည့်ရန်' : 'MyanmarPay သို့ ငွေလွဲ';
+                                const transferTypeColor = t.transferType === 'home' ? 'bg-red-600' : 
+                                                         t.transferType === 'phone-bill' ? 'bg-purple-600' : 'bg-blue-600';
                                 return `
                                 <div onclick="renderAdminTransferDetail('${t.id}')" class="card p-4 rounded-xl cursor-pointer hover:bg-gray-700 transition duration-150">
                                     <div class="flex justify-between items-center">
@@ -1333,8 +1440,8 @@
                                             ${phoneBillInfo ? `<p class="text-xs text-purple-400">${phoneBillInfo}</p>` : ''}
                                         </div>
                                         <div class="text-right">
-                                            <span class="text-sm font-semibold px-2 py-1 rounded-full ${t.transferType === 'home' ? 'bg-red-600' : 'bg-blue-600'} text-white">
-                                                ${t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 'MyanmarPay သို့ ငွေလွဲ'}
+                                            <span class="text-sm font-semibold px-2 py-1 rounded-full ${transferTypeColor} text-white">
+                                                ${transferTypeLabel}
                                             </span>
                                             <p class="text-xs mt-1">${t.amountTHB} ဘတ် ➜ ${t.amountMMK} ကျပ်</p>
                                         </div>
@@ -1344,6 +1451,28 @@
                         }
                     </div>
                     
+                    <!-- Send Notification to All Users -->
+                    <div class="card p-5 rounded-xl border border-emerald-400/50">
+                        <h2 class="text-xl font-bold text-emerald-400 mb-3">အဝင်စာများ - User အားလုံးထံ ပို့ရန်</h2>
+                        <form id="admin-notification-form" onsubmit="event.preventDefault(); sendAdminNotificationToAll()" class="space-y-3">
+                            <div>
+                                <label for="notificationTitle" class="block text-sm font-medium">ခေါင်းစဉ်</label>
+                                <input type="text" id="notificationTitle" required class="mt-1 w-full p-2 border rounded-lg" placeholder="အရေးကြီးအသိပေးချက်">
+                            </div>
+                            <div>
+                                <label for="notificationMessage" class="block text-sm font-medium">စာသား</label>
+                                <textarea id="notificationMessage" rows="2" required class="mt-1 w-full p-2 border rounded-lg" placeholder="အသုံးပြုသူအားလုံးထံ ပို့ရန်မက်ဆေ့ခ်ျ"></textarea>
+                            </div>
+                            <div>
+                                <label for="notificationImage" class="block text-sm font-medium">ပုံ (ရွေးချယ်ရန်)</label>
+                                <input type="file" id="notificationImage" accept="image/*" class="mt-1 w-full p-2 border rounded-lg file:bg-gray-600 file:text-emerald-400">
+                            </div>
+                            <button type="submit" class="w-full py-2 rounded-lg font-semibold bg-emerald-600 text-white mt-3 hover:bg-emerald-500">
+                                <i class="fa-solid fa-bullhorn mr-2"></i> User အားလုံးထံ ပို့ရန်
+                            </button>
+                        </form>
+                    </div>
+
                     <!-- Auto Delete Settings -->
                     <div class="card p-5 rounded-xl border border-yellow-400/50">
                         <h2 class="text-xl font-bold text-yellow-400 mb-3">Auto Delete Settings</h2>
@@ -1355,6 +1484,36 @@
                     </div>
                 </div>
             `;
+        };
+
+        const sendAdminNotificationToAll = async () => {
+            if (!isAdmin) return;
+            
+            const title = document.getElementById('notificationTitle').value.trim();
+            const message = document.getElementById('notificationMessage').value.trim();
+            const imageFile = document.getElementById('notificationImage').files[0];
+
+            if (!title || !message) {
+                return showMessage('ခေါင်းစဉ်နှင့် စာသားကို မဖြစ်မနေ ဖြည့်သွင်းပါ', 'error');
+            }
+
+            document.getElementById('loading-overlay').classList.remove('hidden');
+
+            try {
+                let imageURL = '';
+                if (imageFile) {
+                    imageURL = await uploadToCloudinary(imageFile);
+                }
+
+                await sendNotificationToAllUsers(title, message, imageURL);
+                document.getElementById('admin-notification-form').reset();
+
+            } catch (error) {
+                console.error("Error sending notification to all users:", error);
+                showMessage('မက်ဆေ့ခ်ျပို့ရာတွင် အမှားရှိပါသည်', 'error');
+            } finally {
+                document.getElementById('loading-overlay').classList.add('hidden');
+            }
         };
 
         const manualDeleteOldTransfers = async () => {
@@ -1400,7 +1559,8 @@
             if (!transfer) return showMessage('အချက်အလက် ရှာမတွေ့ပါ', 'error');
 
             const content = document.getElementById('content-area');
-            const transferTypeLabel = transfer.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 'MyanmarPay သို့ ငွေလွဲ';
+            const transferTypeLabel = transfer.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 
+                                     transfer.transferType === 'phone-bill' ? 'ဖုန်းဘေထည့်ရန်' : 'MyanmarPay သို့ ငွေလွဲ';
             const date = transfer.timestamp ? transfer.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
             
             content.innerHTML = `
@@ -1495,7 +1655,8 @@
                     imageURL: replyImageURL,
                     isRead: false,
                     timestamp: serverTimestamp(),
-                    relatedTransferId: transferId
+                    relatedTransferId: transferId,
+                    isAdminReply: true
                 });
 
                 if (message.includes('ပြီးပါပြီ') || message.includes('Completed')) {
@@ -1526,7 +1687,8 @@
                     message: `သင့်၏ ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု အောင်မြင်စွာ ပြီးဆုံးကြောင်း အတည်ပြုပါသည်။`,
                     isRead: false,
                     timestamp: serverTimestamp(),
-                    relatedTransferId: transferId
+                    relatedTransferId: transferId,
+                    isAdminReply: true
                 });
 
                 showMessage('ငွေလွဲမှု ပြီးဆုံးကြောင်း အောင်မြင်စွာ အတည်ပြုပြီးပါပြီ။');
@@ -1553,13 +1715,21 @@
                             '<p class="text-gray-400 p-4 card rounded-lg text-center">အဝင်စာ မရှိပါ</p>' :
                             userNotifications.map(n => {
                                 const date = n.timestamp ? n.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
+                                const isAdminBroadcast = n.isAdminNotification;
+                                const isAdminReply = n.isAdminReply;
+                                const badgeColor = isAdminBroadcast ? 'bg-red-500' : (isAdminReply ? 'bg-green-500' : 'bg-blue-500');
+                                const badgeText = isAdminBroadcast ? 'Broadcast' : (isAdminReply ? 'Reply' : 'Notification');
+                                
                                 return `
                                     <div onclick="markNotificationAsRead('${n.id}')" class="card p-4 rounded-xl cursor-pointer transition duration-150 ${n.isRead ? 'opacity-80' : 'border-2 border-yellow-400'}">
                                         <div class="flex items-start">
                                             <i class="fa-solid fa-bell text-xl ${n.isRead ? 'text-gray-400' : 'text-yellow-400'} mr-3 mt-1"></i>
                                             <div class="flex-grow">
-                                                <p class="font-bold ${n.isRead ? 'text-gray-200' : 'text-white'}">${n.title}</p>
-                                                <p class="text-sm text-gray-400">${n.message}</p>
+                                                <div class="flex justify-between items-start">
+                                                    <p class="font-bold ${n.isRead ? 'text-gray-200' : 'text-white'}">${n.title}</p>
+                                                    <span class="text-xs font-semibold px-2 py-1 rounded-full ${badgeColor} text-white">${badgeText}</span>
+                                                </div>
+                                                <p class="text-sm text-gray-400 mt-1">${n.message}</p>
                                                 ${n.imageURL ? `
                                                     <img src="${n.imageURL}" onerror="this.src='https://placehold.co/100x50/374151/ffffff?text=Image'" class="mt-2 rounded-lg max-h-20 object-contain border border-gray-600" alt="">
                                                     <a href="${n.imageURL}" target="_blank" onclick="event.stopPropagation();" class="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"><i class="fa-solid fa-expand-alt mr-1"></i> ပုံကြီးချဲ့ကြည့်ရန်</a>
@@ -1681,7 +1851,8 @@
             return userTransfers.slice(0, 5).map(t => {
                 const date = t.timestamp ? t.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
                 const statusColor = t.status === 'Completed' ? 'bg-green-600' : (t.status === 'Pending' ? 'bg-yellow-600' : 'bg-red-600');
-                const transferTypeLabel = t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 'MyanmarPay သို့ ငွေလွဲ';
+                const transferTypeLabel = t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 
+                                         t.transferType === 'phone-bill' ? 'ဖုန်းဘေထည့်ရန်' : 'MyanmarPay သို့ ငွေလွဲ';
 
                 return `
                     <div class="card p-3 rounded-xl">
@@ -1802,6 +1973,7 @@
         window.downloadImage = downloadImage;
         window.updateBankImages = updateBankImages;
         window.manualDeleteOldTransfers = manualDeleteOldTransfers;
+        window.sendAdminNotificationToAll = sendAdminNotificationToAll;
         window.setLanguage = (lang) => {
             if (lang === 'en') {
                 document.getElementById('app-title').textContent = 'Thai-Myanmar Remittance (Ya Kyaw)';
