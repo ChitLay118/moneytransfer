@@ -142,12 +142,12 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, query, updateDoc, serverTimestamp, getDocs, deleteDoc, orderBy, limit, where, getCountFromServer } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
         
         // --- Cloudinary Configuration ---
-        const CLOUDINARY_CLOUD_NAME = 'drizdw5nc';
+        const CLOUDINARY_CLOUD_NAME = 'waiyansoe';
         const CLOUDINARY_UPLOAD_PRESET = 'waiyansoe118234';
         
         // --- Firebase Configuration ---
         const FIREBASE_CONFIG = {
-           apiKey: "AIzaSyAUL74mqVCIY1MMclrRhdVbY_VyP4lgQpY",
+            apiKey: "AIzaSyAUL74mqVCIY1MMclrRhdVbY_VyP4lgQpY",
             authDomain: "waiappstore.firebaseapp.com",
             projectId: "waiappstore",
             storageBucket: "waiappstore.firebasestorage.app",
@@ -188,9 +188,6 @@
         let userTransfers = [];
         let adminTransfers = [];
         let userNotifications = [];
-
-        // Auto delete old transfers (7 days)
-        const AUTO_DELETE_DAYS = 7;
 
         // --- Utility Functions ---
         const showMessage = (msg, type = 'success') => {
@@ -264,25 +261,6 @@
             }
         };
 
-        // Auto delete old transfers function
-        const autoDeleteOldTransfers = async () => {
-            if (!isAdmin) return;
-            
-            try {
-                const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
-                const sevenDaysAgo = new Date();
-                sevenDaysAgo.setDate(sevenDaysAgo.getDate() - AUTO_DELETE_DAYS);
-                const sevenDaysAgoTimestamp = serverTimestamp();
-                
-                // In a real implementation, you would query for transfers older than 7 days
-                // This is a placeholder for the auto-delete logic
-                console.log('Auto-delete check for transfers older than 7 days');
-                
-            } catch (error) {
-                console.error('Error in auto-delete:', error);
-            }
-        };
-
         // --- Firebase Initialization and Auth ---
         const initFirebase = async () => {
             try {
@@ -309,11 +287,6 @@
                             loadTransfers();
                             loadNotifications();
                             showScreen('home'); 
-                            
-                            // Run auto-delete check if admin
-                            if (isAdmin) {
-                                autoDeleteOldTransfers();
-                            }
                         }
                     } else {
                         isAuthReady = false;
@@ -507,20 +480,21 @@
                 
                 console.log('Loaded transfers:', transfers.length);
                 
+                // Admin transfers - all transfers sorted by pending status and date
                 adminTransfers = transfers.sort((a, b) => {
                     if (a.status === 'Pending' && b.status !== 'Pending') return -1;
                     if (a.status !== 'Pending' && b.status === 'Pending') return 1;
                     return (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0);
                 });
 
-                // User transfers - only user's transfers, limit to 5 and auto delete oldest
+                // User transfers - only user's transfers, sorted by date
                 userTransfers = transfers.filter(t => t.senderId === userId)
                                          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 
-                // Keep only latest 5 transfers, delete older ones
-                if (userTransfers.length > 5) {
-                    const transfersToDelete = userTransfers.slice(5);
-                    userTransfers = userTransfers.slice(0, 5);
+                // Limit user transfers to 20 and auto delete oldest
+                if (userTransfers.length > 20) {
+                    const transfersToDelete = userTransfers.slice(20);
+                    userTransfers = userTransfers.slice(0, 20);
                     
                     // Delete older transfers in background
                     transfersToDelete.forEach(async (transfer) => {
@@ -553,6 +527,22 @@
                 });
                 
                 userNotifications.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                
+                // Limit notifications to 20 and auto delete oldest
+                if (userNotifications.length > 20) {
+                    const notificationsToDelete = userNotifications.slice(20);
+                    userNotifications = userNotifications.slice(0, 20);
+                    
+                    // Delete older notifications in background
+                    notificationsToDelete.forEach(async (notification) => {
+                        try {
+                            await deleteDoc(doc(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications', notification.id));
+                            console.log('Deleted old notification:', notification.id);
+                        } catch (error) {
+                            console.error('Error deleting old notification:', error);
+                        }
+                    });
+                }
                 
                 const unreadCount = userNotifications.filter(n => !n.isRead).length;
                 const badge = document.getElementById('inbox-badge');
@@ -1430,20 +1420,29 @@
                 await setDoc(newTransferRef, transferData);
 
                 // Send notification to admin
-                if (isAdmin) {
-                    const adminNotificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications'));
-                    await setDoc(adminNotificationRef, {
-                        title: `📤 ငွေလွဲမှု တောင်းဆိုချက် ပို့ပြီးပါပြီ။`,
-                        message: `သင်၏ ${amountTHB.toFixed(2)} ဘတ် ➜ ${amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု တောင်းဆိုချက်ကို Admin ထံ ပို့ပြီးပါပြီ။`,
-                        isRead: false,
-                        timestamp: serverTimestamp(),
-                        relatedTransferId: newTransferRef.id
-                    });
-                }
+                const adminNotificationRef = doc(collection(db, `artifacts/${APP_ID}/users`, ADMIN_EMAIL, 'notifications'));
+                await setDoc(adminNotificationRef, {
+                    title: `📤 User မှ ငွေလွဲမှု တောင်းဆိုချက် ပို့ပြီးပါပြီ။`,
+                    message: `User ${userEmail} မှ ${amountTHB.toFixed(2)} ဘတ် ➜ ${amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု တောင်းဆိုချက်ကို ပို့ပြီးပါပြီ။`,
+                    isRead: false,
+                    timestamp: serverTimestamp(),
+                    relatedTransferId: newTransferRef.id,
+                    isAdminReply: false
+                });
+
+                // Send notification to user
+                const userNotificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications'));
+                await setDoc(userNotificationRef, {
+                    title: `📤 ငွေလွဲမှု တောင်းဆိုချက် ပို့ပြီးပါပြီ။`,
+                    message: `သင်၏ ${amountTHB.toFixed(2)} ဘတ် ➜ ${amountMMK.toFixed(0)} ကျပ် ငွေလွဲမှု တောင်းဆိုချက်ကို Admin ထံ ပို့ပြီးပါပြီ။`,
+                    isRead: false,
+                    timestamp: serverTimestamp(),
+                    relatedTransferId: newTransferRef.id
+                });
 
                 form.reset();
                 updateCalculatedAmount(); 
-                showMessage('ငွေလွဲမှု တောင်းဆိုချက် အောင်မြင်စွာ ပို့ပြီးပါပြီ။');
+                showMessage('ငွေလွဲမှု တောင်းဆိုချက် အောင်မြင်စွာ ပို့ပြီးပါပြီ။ Admin ဆီရောက်ပါပြီ။');
                 showScreen('home');
 
             } catch (e) {
@@ -1521,16 +1520,6 @@
                             </button>
                         </form>
                     </div>
-
-                    <!-- Auto Delete Settings -->
-                    <div class="card p-5 rounded-xl border border-yellow-400/50">
-                        <h2 class="text-xl font-bold text-yellow-400 mb-3">Auto Delete Settings</h2>
-                        <p class="text-sm text-gray-300 mb-2">User တွေငွေလွဲပို့ထားတဲ့စရင်းတွေက ၇ရက်ပြည့်မှ Auto Delete မယ်</p>
-                        <p class="text-xs text-gray-400">လက်ရှိ setting: ${AUTO_DELETE_DAYS} ရက်</p>
-                        <button onclick="manualDeleteOldTransfers()" class="btn-primary w-full py-2 rounded-lg font-semibold mt-3">
-                            <i class="fa-solid fa-trash mr-2"></i> ရက်ကျော်သွားသော ငွေလွဲမှုများကို ဖျက်ရန်
-                        </button>
-                    </div>
                 </div>
             `;
         };
@@ -1560,44 +1549,6 @@
             } catch (error) {
                 console.error("Error sending notification to all users:", error);
                 showMessage('မက်ဆေ့ခ်ျပို့ရာတွင် အမှားရှိပါသည်', 'error');
-            } finally {
-                document.getElementById('loading-overlay').classList.add('hidden');
-            }
-        };
-
-        const manualDeleteOldTransfers = async () => {
-            if (!isAdmin) return;
-            
-            if (!confirm('ရက်ကျော်သွားသော ငွေလွဲမှုများကို ဖျက်မှာသေချာပါသလား?')) {
-                return;
-            }
-            
-            document.getElementById('loading-overlay').classList.remove('hidden');
-            
-            try {
-                // This is a simplified version. In a real app, you would query by date
-                const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
-                const snapshot = await getDocs(transfersColRef);
-                
-                let deletedCount = 0;
-                const now = new Date();
-                const sevenDaysAgo = new Date(now.setDate(now.getDate() - AUTO_DELETE_DAYS));
-                
-                for (const docSnap of snapshot.docs) {
-                    const transfer = docSnap.data();
-                    const transferDate = transfer.timestamp?.toDate();
-                    
-                    if (transferDate && transferDate < sevenDaysAgo && transfer.status === 'Completed') {
-                        await deleteDoc(doc(db, PUBLIC_DATA_PATH, 'transfers', docSnap.id));
-                        deletedCount++;
-                    }
-                }
-                
-                showMessage(`အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။ ${deletedCount} ခု ဖျက်ပြီးပါပြီ။`);
-                
-            } catch (error) {
-                console.error('Error deleting old transfers:', error);
-                showMessage('ဖျက်ရာတွင် အမှားရှိပါသည်', 'error');
             } finally {
                 document.getElementById('loading-overlay').classList.add('hidden');
             }
@@ -1901,7 +1852,7 @@
         const renderProfileTransfers = () => {
             if (userTransfers.length === 0) return '<p class="text-gray-400 text-center">သင် ငွေလွဲထားသော စာရင်းများ မရှိပါ</p>';
 
-            return userTransfers.slice(0, 5).map(t => {
+            return userTransfers.slice(0, 20).map(t => {
                 const date = t.timestamp ? t.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
                 const statusColor = t.status === 'Completed' ? 'bg-green-600' : (t.status === 'Pending' ? 'bg-yellow-600' : 'bg-red-600');
                 const transferTypeLabel = t.transferType === 'home' ? 'အိမ်အရောက် ပို့ရန်' : 
@@ -2025,7 +1976,6 @@
         window.updateProfileName = updateProfileName;
         window.downloadImage = downloadImage;
         window.updateBankImages = updateBankImages;
-        window.manualDeleteOldTransfers = manualDeleteOldTransfers;
         window.sendAdminNotificationToAll = sendAdminNotificationToAll;
         window.selectPaymentMethod = (method, element) => {
             document.getElementById('transferAccountType').value = method;
