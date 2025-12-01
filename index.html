@@ -203,10 +203,10 @@
 
         // State for rates
         let currentRates = {
-            THB_TO_MMK: 121.95, // အကောင့်သို့ငွေလွဲရန် - ထိုင်းမှမြန်မာ
-            MMK_TO_THB: 126.58, // အကောင့်သို့ငွေလွဲရန် - မြန်မာမှထိုင်း
-            rateHomeDeliveryTHB_TO_MMK: 820, // အိမ်သို့ငွေလွဲရန် - ထိုင်းမှမြန်မာ
-            rateHomeDeliveryMMK_TO_THB: 830, // အိမ်သို့ငွေလွဲရန် - မြန်မာမှထိုင်း
+            THB_TO_MMK: 121.95,
+            MMK_TO_THB: 126.58,
+            rateHomeDeliveryTHB_TO_MMK: 820,
+            rateHomeDeliveryMMK_TO_THB: 830,
             lastUpdated: 'Loading...'
         };
 
@@ -630,7 +630,6 @@
                 </button>
                 ${adminButtonHtml}
             `;
-            showScreen(currentScreen);
         };
 
         // --- Rate Management ---
@@ -1780,11 +1779,13 @@
 
         // --- Profile Screen ---
         const renderProfile = () => {
-            const content = document.getElementById('content-area');
+            console.log('Rendering profile...', { userId, userEmail, userTransfers: userTransfers.length });
+            
             const user = auth.currentUser;
             const userEmail = user?.email || 'N/A';
             const userDisplayName = user?.displayName || '';
 
+            const content = document.getElementById('content-area');
             content.innerHTML = `
                 <div class="space-y-6">
                     <!-- Profile Card -->
@@ -1868,7 +1869,11 @@
         };
 
         const renderProfileTransfers = () => {
-            if (userTransfers.length === 0) return '<p class="text-gray-400 text-center">' + t('noPastTransfers') + '</p>';
+            console.log('Rendering profile transfers:', userTransfers.length);
+            
+            if (userTransfers.length === 0) {
+                return '<p class="text-gray-400 text-center">' + t('noPastTransfers') + '</p>';
+            }
 
             return userTransfers.slice(0, 5).map(t => {
                 const date = t.timestamp ? t.timestamp.toDate().toLocaleString('my-MM') : 'N/A';
@@ -1913,15 +1918,22 @@
 
         // --- Core Application Logic ---
         const showScreen = (screenName) => {
-            if (!isAuthReady) return;
+            if (!isAuthReady) {
+                console.log('Auth not ready, showing loading...');
+                const content = document.getElementById('content-area');
+                content.innerHTML = `<p class="text-center text-gray-500">${t('loading')}</p>`;
+                return;
+            }
 
             if (screenName === 'admin' && !isAdmin) {
                 screenName = 'home';
             }
 
             currentScreen = screenName;
-            const navButtons = document.querySelectorAll('.nav-button');
+            console.log('Showing screen:', screenName);
 
+            // Update navigation buttons
+            const navButtons = document.querySelectorAll('.nav-button');
             navButtons.forEach(btn => {
                 if (btn.id !== 'admin-nav-button') {
                     btn.classList.remove('text-emerald-400');
@@ -1942,28 +1954,42 @@
                 }
             }
 
+            // Clear content area
             const content = document.getElementById('content-area');
             content.innerHTML = `<p class="text-center text-gray-500">${t('loading')}</p>`;
 
+            // Render screen after short delay
             setTimeout(() => {
-                switch (screenName) {
-                    case 'home':
-                        renderHome();
-                        break;
-                    case 'transfer':
-                        renderTransfer();
-                        break;
-                    case 'inbox':
-                        renderInbox();
-                        break;
-                    case 'profile':
-                        renderProfile();
-                        break;
-                    case 'admin':
-                        renderAdminPanel();
-                        break;
-                    default:
-                        renderHome();
+                try {
+                    switch (screenName) {
+                        case 'home':
+                            renderHome();
+                            break;
+                        case 'transfer':
+                            renderTransfer();
+                            break;
+                        case 'inbox':
+                            renderInbox();
+                            break;
+                        case 'profile':
+                            renderProfile();
+                            break;
+                        case 'admin':
+                            renderAdminPanel();
+                            break;
+                        default:
+                            renderHome();
+                    }
+                } catch (error) {
+                    console.error('Error rendering screen:', error);
+                    content.innerHTML = `
+                        <div class="p-4 text-center">
+                            <p class="text-red-400">Error loading screen: ${error.message}</p>
+                            <button onclick="showScreen('home')" class="mt-4 px-4 py-2 bg-emerald-500 text-white rounded-lg">
+                                Back to Home
+                            </button>
+                        </div>
+                    `;
                 }
             }, 100);
         };
@@ -1988,7 +2014,9 @@
             if (loadingText) loadingText.textContent = t('loading');
             
             // Refresh current screen
-            showScreen(currentScreen);
+            if (isAuthReady) {
+                showScreen(currentScreen);
+            }
             
             showMessage(currentLanguage === 'my' ? 'ဘာသာစကား ပြောင်းလဲမှု အောင်မြင်ပါသည်' : 'Language changed successfully', 'success');
         };
