@@ -89,6 +89,11 @@
             margin-right: 10px;
             border-radius: 8px;
         }
+        
+        .selected {
+            border-color: var(--primary-color) !important;
+            background-color: rgba(16, 185, 129, 0.1) !important;
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -183,7 +188,6 @@
         let userTransfers = [];
         let adminTransfers = [];
         let userNotifications = [];
-        let adminNotifications = [];
 
         // Auto delete old transfers (7 days)
         const AUTO_DELETE_DAYS = 7;
@@ -304,7 +308,6 @@
                             loadAdminBankInfo();
                             loadTransfers();
                             loadNotifications();
-                            loadAdminNotifications();
                             showScreen('home'); 
                             
                             // Run auto-delete check if admin
@@ -563,43 +566,28 @@
             });
         };
 
-        const loadAdminNotifications = () => {
-            if (!isAuthReady || !userId || !isAdmin) return;
-            
-            const notificationsColRef = collection(db, PUBLIC_DATA_PATH, 'notifications');
-            
-            onSnapshot(notificationsColRef, (snapshot) => {
-                adminNotifications = [];
-                snapshot.forEach((doc) => {
-                    adminNotifications.push({ id: doc.id, ...doc.data() });
-                });
-                
-                adminNotifications.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                
-                if (currentScreen === 'admin') renderAdminPanel();
-            }, (error) => {
-                console.error("Error fetching admin notifications: ", error);
-            });
-        };
-
-        // Send notification to all users
+        // Send notification to all users - FIXED VERSION
         const sendNotificationToAllUsers = async (title, message, imageURL = '') => {
             if (!isAdmin) return;
             
             document.getElementById('loading-overlay').classList.remove('hidden');
             
             try {
-                // First, get all users
-                const usersSnapshot = await getDocs(collection(db, `artifacts/${APP_ID}/users`));
-                const users = [];
-                usersSnapshot.forEach((doc) => {
-                    users.push(doc.id);
-                });
+                // First, get all users from the users collection
+                const usersColRef = collection(db, `artifacts/${APP_ID}/users`);
+                const usersSnapshot = await getDocs(usersColRef);
+                
+                console.log('Total users found:', usersSnapshot.size);
                 
                 // Send notification to each user
-                for (const userId of users) {
+                const promises = [];
+                
+                usersSnapshot.forEach((doc) => {
+                    const userId = doc.id;
+                    console.log('Sending notification to user:', userId);
+                    
                     const notificationRef = doc(collection(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications'));
-                    await setDoc(notificationRef, {
+                    const promise = setDoc(notificationRef, {
                         title,
                         message,
                         imageURL,
@@ -607,17 +595,11 @@
                         timestamp: serverTimestamp(),
                         isAdminNotification: true
                     });
-                }
-                
-                // Also save to admin notifications collection
-                const adminNotificationRef = doc(collection(db, PUBLIC_DATA_PATH, 'notifications'));
-                await setDoc(adminNotificationRef, {
-                    title,
-                    message,
-                    imageURL,
-                    timestamp: serverTimestamp(),
-                    sentBy: ADMIN_EMAIL
+                    promises.push(promise);
                 });
+                
+                // Wait for all notifications to be sent
+                await Promise.all(promises);
                 
                 showMessage('အသုံးပြုသူအားလုံးထံ မက်ဆေ့ခ်ျပို့ပြီးပါပြီ။');
                 
@@ -1025,14 +1007,14 @@
                                 <div id="account-type-field" class="${currentTransferTab === 'account' ? '' : 'hidden'}">
                                     <label for="transferAccountType" class="block text-sm font-medium mb-2">ငွေပို့ထားသည့် အကောင့် (ရွေးချယ်ပါ)</label>
                                     <div class="space-y-3">
-                                        <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPaymentMethod('WavePay')">
+                                        <div class="payment-option flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPaymentMethod('WavePay', this)">
                                             <img src="${adminBankInfo.wavePayURL}" onerror="this.src='https://placehold.co/40x40/10B981/ffffff?text=WP'" class="payment-icon rounded">
                                             <div>
                                                 <p class="font-medium">WavePay</p>
                                                 <p class="text-xs text-gray-400">Wave Money အကောင့်</p>
                                             </div>
                                         </div>
-                                        <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPaymentMethod('KPay')">
+                                        <div class="payment-option flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPaymentMethod('KPay', this)">
                                             <img src="${adminBankInfo.kpayURL}" onerror="this.src='https://placehold.co/40x40/60A5FA/ffffff?text=KP'" class="payment-icon rounded">
                                             <div>
                                                 <p class="font-medium">KPay</p>
@@ -1047,25 +1029,25 @@
                                 <div id="phone-bill-field" class="${currentTransferTab === 'phone-bill' ? '' : 'hidden'}">
                                     <label for="phoneBillType" class="block text-sm font-medium mb-2">ဆင်းအမျိုးအစားရွေးရန် (ရွေးချယ်ပါ)</label>
                                     <div class="grid grid-cols-2 gap-3">
-                                        <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('ATOM')">
+                                        <div class="phone-bill-option flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('ATOM', this)">
                                             <img src="${adminBankInfo.atomURL}" onerror="this.src='https://placehold.co/40x40/FF6B6B/ffffff?text=ATOM'" class="phone-bill-icon">
                                             <div>
                                                 <p class="font-medium">ATOM</p>
                                             </div>
                                         </div>
-                                        <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('MPT')">
+                                        <div class="phone-bill-option flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('MPT', this)">
                                             <img src="${adminBankInfo.mptURL}" onerror="this.src='https://placehold.co/40x40/4ECDC4/ffffff?text=MPT'" class="phone-bill-icon">
                                             <div>
                                                 <p class="font-medium">MPT</p>
                                             </div>
                                         </div>
-                                        <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('Mytel')">
+                                        <div class="phone-bill-option flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('Mytel', this)">
                                             <img src="${adminBankInfo.mytelURL}" onerror="this.src='https://placehold.co/40x40/45B7D1/ffffff?text=Mytel'" class="phone-bill-icon">
                                             <div>
                                                 <p class="font-medium">Mytel</p>
                                             </div>
                                         </div>
-                                        <div class="flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('U9')">
+                                        <div class="phone-bill-option flex items-center p-3 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="selectPhoneBillType('U9', this)">
                                             <img src="${adminBankInfo.u9URL}" onerror="this.src='https://placehold.co/40x40/96CEB4/ffffff?text=U9'" class="phone-bill-icon">
                                             <div>
                                                 <p class="font-medium">U9</p>
@@ -1075,6 +1057,7 @@
                                     <input type="hidden" id="phoneBillType" ${currentTransferTab === 'phone-bill' ? 'required' : ''}>
                                 </div>
 
+                                ${currentTransferTab !== 'phone-bill' ? `
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
                                         <label for="senderName" class="block text-sm font-medium">ငွေလွဲမည့်သူအမည်</label>
@@ -1093,9 +1076,10 @@
                                     </div>
                                     <div>
                                         <label for="receiverPhoneMM" class="block text-sm font-medium">ဖုန်းနံပါတ် (မြန်မာ)</label>
-                                        <input type="tel" id="receiverPhoneMM" ${currentTransferTab !== 'phone-bill' ? 'required' : ''} class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
+                                        <input type="tel" id="receiverPhoneMM" required class="mt-1 w-full p-2 border rounded-lg" placeholder="09xxxxxxxxx">
                                     </div>
                                 </div>
+                                ` : ''}
                                 
                                 <!-- Phone Number for Bill (ONLY for Phone Bill Tab) -->
                                 <div id="phone-bill-number-field" class="${currentTransferTab === 'phone-bill' ? '' : 'hidden'}">
@@ -1152,28 +1136,32 @@
             // Initialize payment method selection
             setTimeout(() => {
                 if (currentTransferTab === 'account') {
-                    window.selectPaymentMethod = (method) => {
+                    window.selectPaymentMethod = (method, element) => {
                         document.getElementById('transferAccountType').value = method;
-                        const items = document.querySelectorAll('#account-type-field > div > div');
+                        const items = document.querySelectorAll('.payment-option');
                         items.forEach(item => {
+                            item.classList.remove('selected');
                             item.classList.remove('border-emerald-500', 'bg-gray-700');
                             item.classList.add('border-gray-600');
                         });
-                        event.currentTarget.classList.add('border-emerald-500', 'bg-gray-700');
-                        event.currentTarget.classList.remove('border-gray-600');
+                        element.classList.add('selected');
+                        element.classList.add('border-emerald-500', 'bg-gray-700');
+                        element.classList.remove('border-gray-600');
                     };
                 }
                 
                 if (currentTransferTab === 'phone-bill') {
-                    window.selectPhoneBillType = (type) => {
+                    window.selectPhoneBillType = (type, element) => {
                         document.getElementById('phoneBillType').value = type;
-                        const items = document.querySelectorAll('#phone-bill-field > div > div');
+                        const items = document.querySelectorAll('.phone-bill-option');
                         items.forEach(item => {
+                            item.classList.remove('selected');
                             item.classList.remove('border-purple-500', 'bg-gray-700');
                             item.classList.add('border-gray-600');
                         });
-                        event.currentTarget.classList.add('border-purple-500', 'bg-gray-700');
-                        event.currentTarget.classList.remove('border-gray-600');
+                        element.classList.add('selected');
+                        element.classList.add('border-purple-500', 'bg-gray-700');
+                        element.classList.remove('border-gray-600');
                     };
                 }
             }, 100);
@@ -1262,6 +1250,8 @@
             const addressInput = document.getElementById('deliveryAddress');
             const amountDirection = document.getElementById('amountDirection');
             const receiverPhoneMM = document.getElementById('receiverPhoneMM');
+            const senderNameField = document.getElementById('senderName')?.parentElement?.parentElement;
+            const senderPhoneTHField = document.getElementById('senderPhoneTH')?.parentElement?.parentElement;
 
             // Reset all fields first
             accountTypeField.classList.add('hidden');
@@ -1274,7 +1264,9 @@
             bankQrInput.removeAttribute('required');
             addressField.classList.add('hidden');
             addressInput.removeAttribute('required');
-            receiverPhoneMM.setAttribute('required', 'required');
+            
+            if (senderNameField) senderNameField.classList.remove('hidden');
+            if (senderPhoneTHField) senderPhoneTHField.classList.remove('hidden');
 
             if (tab === 'account') {
                 accountTypeField.classList.remove('hidden');
@@ -1291,7 +1283,8 @@
                 phoneBillTypeInput.setAttribute('required', 'required');
                 phoneBillNumberField.classList.remove('hidden');
                 phoneBillNumberInput.setAttribute('required', 'required');
-                receiverPhoneMM.removeAttribute('required');
+                if (senderNameField) senderNameField.classList.add('hidden');
+                if (senderPhoneTHField) senderPhoneTHField.classList.add('hidden');
                 amountDirection.innerHTML = getAmountDirectionOptions();
             }
             
@@ -1301,7 +1294,9 @@
             };
             
             // Update calculated amount when tab changes
-            updateCalculatedAmount();
+            setTimeout(() => {
+                updateCalculatedAmount();
+            }, 100);
         };
 
         const submitTransfer = async (transferType) => {
@@ -1311,10 +1306,16 @@
             const transferAccountType = transferType === 'account' ? document.getElementById('transferAccountType').value : 'N/A';
             const phoneBillType = transferType === 'phone-bill' ? document.getElementById('phoneBillType').value : 'N/A';
             const phoneBillNumber = transferType === 'phone-bill' ? document.getElementById('phoneBillNumber').value : 'N/A';
-            const senderName = document.getElementById('senderName').value;
-            const senderPhoneTH = document.getElementById('senderPhoneTH').value;
-            const receiverName = document.getElementById('receiverName').value;
-            const receiverPhoneMM = transferType !== 'phone-bill' ? document.getElementById('receiverPhoneMM').value : 'N/A';
+            
+            // For phone bill, don't require sender/receiver info
+            let senderName = '', senderPhoneTH = '', receiverName = '', receiverPhoneMM = '';
+            if (transferType !== 'phone-bill') {
+                senderName = document.getElementById('senderName').value;
+                senderPhoneTH = document.getElementById('senderPhoneTH').value;
+                receiverName = document.getElementById('receiverName').value;
+                receiverPhoneMM = document.getElementById('receiverPhoneMM').value;
+            }
+            
             const amountInput = parseFloat(document.getElementById('amountInput').value);
             const amountDirection = document.getElementById('amountDirection').value;
             const receiptFileInput = document.getElementById('receiptFile');
@@ -1374,27 +1375,40 @@
                 const transfersColRef = collection(db, PUBLIC_DATA_PATH, 'transfers');
                 const newTransferRef = doc(transfersColRef);
                 
-                await setDoc(newTransferRef, {
+                const transferData = {
                     senderId: userId,
                     senderEmail: userEmail,
-                    senderName,
-                    senderPhoneTH,
-                    receiverName,
-                    receiverPhoneMM,
-                    transferAccountType, 
-                    phoneBillType,
-                    phoneBillNumber,
                     amountTHB: parseFloat(amountTHB.toFixed(2)),
                     amountMMK: parseFloat(amountMMK.toFixed(2)),
                     transferDirection: amountDirection,
                     transferType: transferType, 
-                    deliveryAddress: deliveryAddress || 'N/A', 
                     receiptImageURL, 
-                    bankQrImageURL: bankQrImageURL || 'N/A',
                     timestamp: serverTimestamp(),
                     status: 'Pending',
                     adminReply: { message: '', imageURL: '' }
-                });
+                };
+
+                // Add conditional fields
+                if (transferType === 'account') {
+                    transferData.transferAccountType = transferAccountType;
+                    transferData.bankQrImageURL = bankQrImageURL || 'N/A';
+                }
+                
+                if (transferType === 'phone-bill') {
+                    transferData.phoneBillType = phoneBillType;
+                    transferData.phoneBillNumber = phoneBillNumber;
+                } else {
+                    transferData.senderName = senderName;
+                    transferData.senderPhoneTH = senderPhoneTH;
+                    transferData.receiverName = receiverName;
+                    transferData.receiverPhoneMM = receiverPhoneMM;
+                }
+                
+                if (transferType === 'home') {
+                    transferData.deliveryAddress = deliveryAddress || 'N/A';
+                }
+
+                await setDoc(newTransferRef, transferData);
 
                 form.reset();
                 updateCalculatedAmount(); 
@@ -1431,12 +1445,16 @@
                                                          t.transferType === 'phone-bill' ? 'ဖုန်းဘေထည့်ရန်' : 'MyanmarPay သို့ ငွေလွဲ';
                                 const transferTypeColor = t.transferType === 'home' ? 'bg-red-600' : 
                                                          t.transferType === 'phone-bill' ? 'bg-purple-600' : 'bg-blue-600';
+                                const senderInfo = t.transferType === 'phone-bill' ? 
+                                    `<p class="text-xs text-gray-400">ဖုန်းဘေထည့်ရန်</p>` : 
+                                    `<p class="font-bold text-lg text-emerald-400">${t.senderName || 'N/A'}</p>
+                                     <p class="text-xs text-gray-400">${t.senderEmail}</p>`;
+                                
                                 return `
                                 <div onclick="renderAdminTransferDetail('${t.id}')" class="card p-4 rounded-xl cursor-pointer hover:bg-gray-700 transition duration-150">
                                     <div class="flex justify-between items-center">
                                         <div>
-                                            <p class="font-bold text-lg text-emerald-400">${t.senderName || 'N/A'}</p>
-                                            <p class="text-xs text-gray-400">${t.senderEmail}</p>
+                                            ${senderInfo}
                                             ${phoneBillInfo ? `<p class="text-xs text-purple-400">${phoneBillInfo}</p>` : ''}
                                         </div>
                                         <div class="text-right">
@@ -1569,16 +1587,18 @@
                     
                     <h2 class="text-2xl font-bold text-red-400">ငွေလွဲမှု အသေးစိတ် - (${transferTypeLabel})</h2>
                     <div class="card p-5 rounded-xl space-y-3">
-                        <p><strong>ငွေလွဲသူ (Name):</strong> ${transfer.senderName}</p>
+                        ${transfer.transferType !== 'phone-bill' ? `
+                            <p><strong>ငွေလွဲသူ (Name):</strong> ${transfer.senderName || 'N/A'}</p>
+                            <p><strong>လက်ခံသူ (Name):</strong> ${transfer.receiverName || 'N/A'}</p>
+                            <p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH || 'N/A'}</p>
+                            <p><strong>Phone (MM):</strong> ${transfer.receiverPhoneMM || 'N/A'}</p>
+                        ` : ''}
                         <p><strong>Email:</strong> ${transfer.senderEmail}</p>
-                        <p><strong>Phone (TH):</strong> ${transfer.senderPhoneTH}</p>
-                        <p><strong>လက်ခံသူ (Name):</strong> ${transfer.receiverName}</p>
-                        <p><strong>Phone (MM):</strong> ${transfer.receiverPhoneMM}</p>
                         <p><strong>Amount:</strong> ${transfer.amountTHB.toFixed(2)} ဘတ် ➜ ${transfer.amountMMK.toFixed(2)} ကျပ်</p>
-                        <p><strong>Type:</strong> ${transferTypeLabel} (${transfer.transferAccountType})</p>
+                        <p><strong>Type:</strong> ${transferTypeLabel} ${transfer.transferAccountType ? '(' + transfer.transferAccountType + ')' : ''}</p>
                         ${transfer.phoneBillType ? `<p class="text-purple-400"><strong>ဆင်းအမျိုးအစား:</strong> ${transfer.phoneBillType}</p>` : ''}
                         ${transfer.phoneBillNumber ? `<p class="text-purple-400"><strong>ဖုန်းဘေနံပါတ်:</strong> ${transfer.phoneBillNumber}</p>` : ''}
-                        <p class="text-red-400"><strong>ပို့ရမည့်လိပ်စာ:</strong> ${transfer.deliveryAddress || 'N/A'}</p>
+                        ${transfer.deliveryAddress && transfer.deliveryAddress !== 'N/A' ? `<p class="text-red-400"><strong>ပို့ရမည့်လိပ်စာ:</strong> ${transfer.deliveryAddress}</p>` : ''}
                         <p><strong>ရက်စွဲ:</strong> ${date}</p>
                         <p><strong>Status:</strong> <span class="font-bold text-yellow-400">${transfer.status}</span></p>
                     </div>
@@ -1751,6 +1771,8 @@
             try {
                 const docRef = doc(db, `artifacts/${APP_ID}/users/${userId}`, 'notifications', id);
                 await updateDoc(docRef, { isRead: true });
+                // Reload notifications
+                loadNotifications();
             } catch(e) {
                 console.error("Error marking as read:", e);
             }
@@ -1859,7 +1881,7 @@
                         <div class="flex justify-between items-center">
                             <div>
                                 <p class="font-bold text-gray-100">${t.amountTHB.toFixed(2)} ဘတ် ➜ ${t.amountMMK.toFixed(2)} ကျပ်</p>
-                                <p class="text-xs text-gray-400 mt-1">${transferTypeLabel} (${t.receiverName})</p>
+                                <p class="text-xs text-gray-400 mt-1">${transferTypeLabel} ${t.receiverName ? '(' + t.receiverName + ')' : ''}</p>
                                 ${t.phoneBillType ? `<p class="text-xs text-purple-400">${t.phoneBillType}: ${t.phoneBillNumber}</p>` : ''}
                             </div>
                             <div class="text-right">
@@ -1974,6 +1996,30 @@
         window.updateBankImages = updateBankImages;
         window.manualDeleteOldTransfers = manualDeleteOldTransfers;
         window.sendAdminNotificationToAll = sendAdminNotificationToAll;
+        window.selectPaymentMethod = (method, element) => {
+            document.getElementById('transferAccountType').value = method;
+            const items = document.querySelectorAll('.payment-option');
+            items.forEach(item => {
+                item.classList.remove('selected');
+                item.classList.remove('border-emerald-500', 'bg-gray-700');
+                item.classList.add('border-gray-600');
+            });
+            element.classList.add('selected');
+            element.classList.add('border-emerald-500', 'bg-gray-700');
+            element.classList.remove('border-gray-600');
+        };
+        window.selectPhoneBillType = (type, element) => {
+            document.getElementById('phoneBillType').value = type;
+            const items = document.querySelectorAll('.phone-bill-option');
+            items.forEach(item => {
+                item.classList.remove('selected');
+                item.classList.remove('border-purple-500', 'bg-gray-700');
+                item.classList.add('border-gray-600');
+            });
+            element.classList.add('selected');
+            element.classList.add('border-purple-500', 'bg-gray-700');
+            element.classList.remove('border-gray-600');
+        };
         window.setLanguage = (lang) => {
             if (lang === 'en') {
                 document.getElementById('app-title').textContent = 'Thai-Myanmar Remittance (Ya Kyaw)';
