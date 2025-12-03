@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ထိုင်း-မြန်မာငွေလွဲ (ရေကျော်)</title>
+    <title>ထိုင်း-မြန်မာငွေလွှဲ (WaiYan)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -117,7 +117,7 @@
     <div id="app-content-wrapper" class="max-w-xl mx-auto min-h-screen flex flex-col hidden">
         <!-- Header -->
         <header id="app-header" class="p-4 pt-6 text-center">
-            <h1 class="text-2xl font-extrabold" id="app-title">ထိုင်း-မြန်မာငွေလွဲ (ရေကျော်)</h1>
+            <h1 class="text-2xl font-extrabold" id="app-title">ထိုင်း-မြန်မာငွေလွှဲ (WaiYan)</h1>
             <p id="user-info" class="text-sm mt-1 text-gray-500">Loading user...</p>
         </header>
 
@@ -166,9 +166,9 @@
         // State for rates
         let currentRates = {
             THB_TO_MMK: 121.95, // ထိုင်းမှမြန်မာ (အကောင့်ထဲထည့်ဖို့ ၁သိန်းရရန် ဘတ်)
-            THB_TO_MMK_PHONE: 125.00, // ထိုင်းမှမြန်မာ (အကောင့်သို့ထည့်ရန်နှင့်ဖုန်းဘေ)
-            rateHomeDeliveryTHB_THB_MMK: 820, // အိမ်သို့လွဲရန် (ထိုင်းမှမြန်မာ) ၁သိန်းရရန် ဘတ်
-            rateHomeDeliveryTHB_MMK_THB: 850, // အိမ်သို့လွဲရန် (မြန်မာမှထိုင်း) ၁သိန်းရရန် ဘတ်
+            THB_TO_MMK_PHONE: 125.00, // ထိုင်းမှမြန်မာဖုန်းဘေ (မြန်မာနိုင်ငံသို့ဖုန်းဘေထည့်ရန်)
+            rateHomeDeliveryTHB_THB_MMK: 820, // အိမ်သို့လွှဲရန် (ထိုင်းမှမြန်မာ) ၁သိန်းရရန် ဘတ်
+            rateHomeDeliveryTHB_MMK_THB: 850, // အိမ်သို့လွှဲရန် (မြန်မာမှထိုင်း) ၁သိန်းရရန် ဘတ်
             lastUpdated: 'Loading...'
         };
 
@@ -607,7 +607,7 @@
             
             // ထိုင်းမှမြန်မာ (အကောင့်ထဲထည့်ဖို့ ၁သိန်းရရန် ဘတ်)
             const thbFor100kMMK = (100000 / currentRates.THB_TO_MMK).toFixed(2);
-            // ထိုင်းမှမြန်မာ (အကောင့်သို့ထည့်ရန်နှင့်ဖုန်းဘေ)
+            // ထိုင်းမှမြန်မာဖုန်းဘေ (မြန်မာနိုင်ငံသို့ဖုန်းငွေထည့်ရန်)
             const thbFor100kMMKPhone = (100000 / currentRates.THB_TO_MMK_PHONE).toFixed(2);
             // အိမ်သို့လွဲရန် (ထိုင်းမှမြန်မာ) ၁သိန်းရရန် ဘတ်
             const thbHomeDelivery_THB_MMK = currentRates.rateHomeDeliveryTHB_THB_MMK;
@@ -647,7 +647,7 @@
 
                     <!-- Phone Bill Transfer Rate Card -->
                     <div class="card p-6 rounded-xl space-y-4 border border-blue-500/50">
-                        <h2 class="text-lg font-bold text-blue-400">ထိုင်းမှမြန်မာ (အကောင့်သို့ထည့်ရန်နှင့်ဖုန်းဘေ)</h2>
+                        <h2 class="text-lg font-bold text-blue-400">ထိုင်းမှမြန်မာဖုန်းဘေ (မြန်မာနိုင်ငံသို့ဖုန်းဘေထည့်ရန်)</h2>
                         <div class="flex items-center justify-between p-4 bg-gray-600 rounded-xl">
                             <div class="text-center w-1/3">
                                 <p class="text-xs font-medium text-gray-300">ဘတ်</p>
@@ -665,7 +665,7 @@
                         </div>
                         <div class="text-center pt-2">
                             <p class="text-sm font-bold text-gray-200">
-                                အကောင့်သို့ထည့်ရန်နှင့်ဖုန်းဘေ: ${thbFor100kMMKPhone} ဘတ်
+                                မြန်မာနိုင်ငံသို့ဖုန်းဘေထည့်ရန်: ${thbFor100kMMKPhone} ဘတ်
                             </p>
                         </div>
                     </div>
